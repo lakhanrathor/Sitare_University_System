@@ -10,7 +10,7 @@ async function start() {
   await connectDB();
   initSocket(server);
 
-  server.listen(env.port, () => {
+  server.listen(env.port, '0.0.0.0', () => {
     console.log(`[api] Sitare ERP API listening on http://localhost:${env.port}`);
     console.log(`[api] Allowing client origin ${env.clientOrigin}`);
   });
