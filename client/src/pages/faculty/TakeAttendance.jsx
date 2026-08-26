@@ -165,20 +165,49 @@ export default function TakeAttendance() {
     [schedule, selected]
   );
 
+  /*
+   * The subject's other periods on the same day. A lab timetabled across two
+   * or three of them is one sitting, so the register is the same for all of
+   * it — and ticking the same names again for each is busywork.
+   */
+  const sameDay = useMemo(() => {
+    if (!selected) return [];
+    return (schedule?.occurrences || [])
+      .filter((o) => o.date === selected.date && o.slot !== selected.slot && o.takeable)
+      .sort((a, b) => a.slot - b.slot);
+  }, [schedule, selected]);
+
+  /** Which of those the teacher has chosen to cover as well. */
+  const [alsoSlots, setAlsoSlots] = useState([]);
+
+  // A different class means a different set of neighbours; never carry them over.
+  useEffect(() => {
+    setAlsoSlots([]);
+  }, [selected?.date, selected?.slot]);
+
+  const toggleAlso = (slot) =>
+    setAlsoSlots((prev) => (prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]));
+
+  const allSelected = sameDay.length > 0 && alsoSlots.length === sameDay.length;
+
   const save = async () => {
     setSaving(true);
     try {
       const res = await api.mark(subjectId, {
         date: selected.date,
         slot: selected.slot,
+        alsoSlots,
         topic: topic.trim(),
         records: sheet.students.map((s) => ({
           studentId: s.studentId,
           status: marks[s.studentId] || 'absent',
         })),
       });
+      const covered = res.slots?.length || 1;
       notify(
-        `${res.presentCount} present, ${res.absentCount} absent. This subject now has ${res.conducted} conducted ${
+        `${res.presentCount} present, ${res.absentCount} absent${
+          covered > 1 ? `, recorded against ${covered} classes` : ''
+        }. This subject now has ${res.conducted} conducted ${
           res.conducted === 1 ? 'class' : 'classes'
         }.`,
         { variant: 'success', title: `Saved for ${formatDate(selected.date)}` }
@@ -307,6 +336,56 @@ export default function TakeAttendance() {
             />
           </Field>
         </div>
+
+        {/*
+          A block of periods is one sitting. Offered rather than assumed: the
+          same subject can legitimately run twice in a day with different
+          students in the room, so the teacher says which classes this covers.
+        */}
+        {sameDay.length > 0 && !noneTakeable && (
+          <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50/60 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-indigo-900">
+                {sameDay.length === 1
+                  ? 'One more class of this subject today'
+                  : `${sameDay.length} more classes of this subject today`}
+              </p>
+              <button
+                onClick={() => setAlsoSlots(allSelected ? [] : sameDay.map((o) => o.slot))}
+                className="text-xs font-medium text-indigo-700 underline-offset-2 hover:underline"
+              >
+                {allSelected ? 'Clear' : `Apply to all ${sameDay.length + 1}`}
+              </button>
+            </div>
+            <p className="mt-0.5 text-xs text-indigo-800/80">
+              Take the register once and tick the classes it covers. Each one is still recorded as
+              its own class, so the conducted count matches the timetable.
+            </p>
+
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              {sameDay.map((o) => (
+                <label
+                  key={keyOf(o)}
+                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition ${
+                    alsoSlots.includes(o.slot)
+                      ? 'border-indigo-400 bg-white text-indigo-800'
+                      : 'border-indigo-200 bg-white/60 text-slate-600 hover:border-indigo-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={alsoSlots.includes(o.slot)}
+                    onChange={() => toggleAlso(o.slot)}
+                    className="rounded border-slate-300"
+                  />
+                  {o.slotLabel}
+                  {/* Overwriting a register already taken is a correction, not a slip — but say so. */}
+                  {o.taken && <span className="text-amber-700">· already recorded</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-4">
           {noneTakeable ? (
@@ -466,7 +545,12 @@ export default function TakeAttendance() {
                 </p>
                 <Button onClick={save} loading={saving} disabled={!current?.takeable}>
                   <Save className="h-4 w-4" />
-                  {current?.taken ? 'Update attendance' : 'Save attendance'}
+                  {/* Say the count when one register covers a block. */}
+                  {alsoSlots.length > 0
+                    ? `Save for ${alsoSlots.length + 1} classes`
+                    : current?.taken
+                      ? 'Update attendance'
+                      : 'Save attendance'}
                 </Button>
               </div>
             </div>

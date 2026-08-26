@@ -192,13 +192,15 @@ export default function ClassActionsModal({
       'Register updated'
     );
 
-  /* An already-changed occurrence only offers "undo". */
-  const isChanged = ['moved-in', 'moved-out', 'cancelled', 'swapped-in', 'extra'].includes(
-    occurrence.origin
-  );
+  /*
+   * A period that is no longer actually happening on this date — it moved
+   * away or was cancelled — has nothing left to shift, swap or cancel. That
+   * state only reaches here defensively; the grid never renders these as
+   * clickable (see isGone in lib/timetable), so this stays informational.
+   */
+  const isGoneOrigin = ['moved-out', 'cancelled'].includes(occurrence.origin);
 
-  if (isChanged) {
-    const fromSwap = Boolean(occurrence.swapRequest);
+  if (isGoneOrigin) {
     return (
       <Modal
         open={open}
@@ -210,7 +212,7 @@ export default function ClassActionsModal({
             <Button variant="secondary" onClick={onClose}>
               Close
             </Button>
-            {canManage && !fromSwap && occurrence.changeId && (
+            {canManage && !occurrence.swapRequest && occurrence.changeId && (
               <Button variant="danger" onClick={doUndo} loading={busy}>
                 <Undo2 className="h-4 w-4" />
                 Undo this change
@@ -223,29 +225,29 @@ export default function ClassActionsModal({
           {error && <ErrorNote>{error}</ErrorNote>}
           <div className="rounded-lg border border-slate-200 p-3.5 text-sm">
             <p className="font-medium text-slate-900">
-              {occurrence.origin === 'cancelled' && 'This class is cancelled.'}
-              {occurrence.origin === 'moved-out' &&
-                `Moved to ${shortDate(occurrence.movedTo.date)}, slot ${occurrence.movedTo.slot}.`}
-              {occurrence.origin === 'moved-in' &&
-                `Moved here from ${shortDate(occurrence.movedFrom.date)}, slot ${occurrence.movedFrom.slot}.`}
-              {occurrence.origin === 'swapped-in' &&
-                `Swapped in from ${shortDate(occurrence.movedFrom.date)}, slot ${occurrence.movedFrom.slot}.`}
-              {occurrence.origin === 'extra' && 'Extra class booked into a free period.'}
+              {occurrence.origin === 'cancelled'
+                ? 'This class is cancelled.'
+                : `Moved to ${shortDate(occurrence.movedTo.date)}, slot ${occurrence.movedTo.slot}.`}
             </p>
             {occurrence.reason && (
               <p className="mt-1 text-slate-500">Reason: {occurrence.reason}</p>
             )}
           </div>
-          {fromSwap && (
-            <InfoNote>
-              This came from an approved swap. To reverse it, raise a new swap request rather than
-              undoing one half — otherwise the two classes would fall out of step.
-            </InfoNote>
-          )}
         </div>
       </Modal>
     );
   }
+
+  /*
+   * A period that IS still happening today, just relocated here — moved,
+   * swapped or booked extra — is a live class like any other and can still
+   * be shifted, swapped again or cancelled. It gets the history note and,
+   * where it applies, the one-click undo, on top of the normal tabs below —
+   * not instead of them.
+   */
+  const hasHistory = ['moved-in', 'swapped-in', 'extra'].includes(occurrence.origin);
+  const fromSwap = Boolean(occurrence.swapRequest);
+  const canUndo = canManage && hasHistory && !fromSwap && occurrence.changeId;
 
   if (!canManage) {
     return (
@@ -305,6 +307,12 @@ export default function ClassActionsModal({
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
+          {canUndo && (
+            <Button variant="danger" onClick={doUndo} loading={busy}>
+              <Undo2 className="h-4 w-4" />
+              Undo this change
+            </Button>
+          )}
           {tab === 'move' && (
             <Button onClick={doMove} loading={busy} disabled={past}>
               Shift class
@@ -339,6 +347,27 @@ export default function ClassActionsModal({
     >
       <div className="space-y-4">
         {error && <ErrorNote>{error}</ErrorNote>}
+        {hasHistory && (
+          <div className="rounded-lg border border-slate-200 p-3.5 text-sm">
+            <p className="font-medium text-slate-900">
+              {occurrence.origin === 'moved-in' &&
+                `Moved here from ${shortDate(occurrence.movedFrom.date)}, slot ${occurrence.movedFrom.slot}.`}
+              {occurrence.origin === 'swapped-in' &&
+                `Swapped in from ${shortDate(occurrence.movedFrom.date)}, slot ${occurrence.movedFrom.slot}.`}
+              {occurrence.origin === 'extra' && 'Extra class booked into this free period.'}
+            </p>
+            {occurrence.reason && (
+              <p className="mt-1 text-slate-500">Reason: {occurrence.reason}</p>
+            )}
+          </div>
+        )}
+        {fromSwap && (
+          <InfoNote>
+            This came from an approved swap, so a one-click undo isn't offered — undoing only one
+            half would leave the two classes out of step. Shift it, swap it again or cancel it below
+            like any other class instead.
+          </InfoNote>
+        )}
         {/* Assigning who marks a register is about the recurring period, so it
             stays available even after the date has passed. */}
         {past && tab !== 'attendance' && (

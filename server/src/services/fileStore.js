@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { Readable } from 'stream';
 import ApiError from '../utils/ApiError.js';
+import { auditLog } from '../utils/audit.js';
 
 /**
  * Attachment storage, on GridFS.
@@ -28,14 +29,15 @@ export function putFile({ buffer, filename, contentType, meta = {} }) {
     Readable.from(buffer)
       .pipe(upload)
       .on('error', reject)
-      .on('finish', () =>
+      .on('finish', () => {
+        auditLog('file_stored', { fileId: String(upload.id), filename, size: buffer.length });
         resolve({
           fileId: upload.id,
           filename,
           contentType: contentType || 'application/octet-stream',
           size: buffer.length,
-        })
-      );
+        });
+      });
   });
 }
 
@@ -44,6 +46,7 @@ export async function openFile(fileId) {
   const id = new mongoose.Types.ObjectId(String(fileId));
   const [file] = await bucket().find({ _id: id }).limit(1).toArray();
   if (!file) throw ApiError.notFound('That file is no longer stored');
+  auditLog('file_downloaded', { fileId: String(id) });
   return { file, stream: bucket().openDownloadStream(id) };
 }
 
@@ -55,6 +58,7 @@ export async function deleteFiles(fileIds = []) {
   for (const id of fileIds) {
     try {
       await bucket().delete(new mongoose.Types.ObjectId(String(id)));
+      auditLog('file_deleted', { fileId: String(id) });
     } catch {
       /* already removed */
     }

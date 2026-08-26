@@ -29,6 +29,15 @@ const userSchema = new mongoose.Schema(
 
     department: { type: String, trim: true },
     isActive: { type: Boolean, default: true },
+
+    /*
+     * Google's stable subject id for this person, recorded the first time
+     * they sign in with Google. It identifies *who signed in*, nothing more —
+     * role, section and access still come from the fields above, which only
+     * an admin can change. `sparse` because most accounts sign in with a
+     * password only and never get one.
+     */
+    googleSub: { type: String, default: null, unique: true, sparse: true },
   },
   { timestamps: true }
 );

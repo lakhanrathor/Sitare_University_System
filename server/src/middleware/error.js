@@ -32,7 +32,18 @@ export function errorHandler(err, _req, res, _next) {
       err.issues.map((i) => ({ field: i.path.join('.'), message: i.message }))
     );
   } else if (!(err instanceof ApiError)) {
-    error = new ApiError(err.statusCode || 500, err.message || 'Something went wrong');
+    /*
+     * An error nobody threw on purpose — a driver error, a bug, a native
+     * exception — can carry a connection string, a file path, or other
+     * internals in `message`. Those are safe to log, never safe to hand back
+     * to the browser once this is actually deployed.
+     */
+    const statusCode = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
+    const message =
+      statusCode >= 500 && env.isProd
+        ? 'Something went wrong. Please try again.'
+        : err.message || 'Something went wrong';
+    error = new ApiError(statusCode, message);
   }
 
   if (error.statusCode >= 500) console.error('[error]', err);

@@ -5,6 +5,7 @@ import AttendanceDelegation from '../models/AttendanceDelegation.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getConductedCounts, getSubjectRoster } from '../services/attendanceService.js';
+import { todayKey } from '../utils/date.js';
 
 /** Faculty may only touch their own subjects; admin may touch any. */
 export async function assertSubjectAccess(user, subjectId) {
@@ -72,9 +73,11 @@ export const listSubjects = asyncHandler(async (req, res) => {
    * Classes this lecturer is standing in on. Keyed by subject so the card can
    * say which dates, rather than implying they have taken over the subject.
    */
+  const today = todayKey();
   const myDelegations = role === 'faculty' ? await delegationsFor(_id) : [];
   const delegatedBySubject = new Map();
   for (const d of myDelegations) {
+    if (d.dateKey < today) continue; // stand-in's job is done once the covered day has passed
     const k = String(d.subject);
     if (!delegatedBySubject.has(k)) delegatedBySubject.set(k, []);
     delegatedBySubject.get(k).push(d);

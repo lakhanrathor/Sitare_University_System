@@ -136,6 +136,12 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
     TimetableEntry.find(entryFilter).populate(populate).lean(),
     ScheduleChange.find({
       $and: [
+        // Scoped to the same timetables as the entries above. Without this, an
+        // extra class has nothing else tying it to a semester — a section-less
+        // booking has section: null, which the section filter below matches for
+        // every semester alike — so one semester's extra class would appear on
+        // every other semester's grid at the same date and period number.
+        { timetable: { $in: timetables.map((t) => t._id) } },
         { $or: [{ dateKey: { $in: dates } }, { toDateKey: { $in: dates } }] },
         ...(sectionId ? [{ $or: [{ section: sectionId }, { section: null }] }] : []),
       ],

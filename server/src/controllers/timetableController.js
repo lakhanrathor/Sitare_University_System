@@ -137,14 +137,21 @@ export const editEntry = asyncHandler(async (req, res) => {
       entry.faculty = person?._id || null;
       changes.push(person ? `${person.name} takes this period` : 'lecturer cleared here');
     } else {
+      // A subject always has an owner — "left unassigned" would null out a
+      // required field. Clearing for just this period is what 'entry' is for.
+      if (!person) {
+        throw ApiError.badRequest(
+          'A subject must have a lecturer — clear the lecturer for just this period instead, or choose a replacement.'
+        );
+      }
       // Assign the subject itself, so nothing anywhere still reads unassigned.
       const subjectId = entry.subject?._id || entry.subject;
       if (subjectId) {
-        await Subject.updateOne({ _id: subjectId }, { $set: { faculty: person?._id || null } });
+        await Subject.updateOne({ _id: subjectId }, { $set: { faculty: person._id } });
       }
       // Clear the per-period override so the cell inherits the new owner.
       entry.faculty = null;
-      changes.push(person ? `assigned to ${person.name}` : 'left unassigned');
+      changes.push(`assigned to ${person.name}`);
     }
   }
 

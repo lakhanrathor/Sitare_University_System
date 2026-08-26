@@ -1,13 +1,22 @@
 import { useState } from 'react';
 import { GraduationCap } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
 import { Button, Input, ErrorNote } from '../components/ui';
 
+// Same variable the provider in main.jsx reads. Checked again here so an
+// unconfigured deployment quietly falls back to password-only login instead
+// of rendering a Google button that can never actually work.
+const GOOGLE_ENABLED = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+
 export default function Login() {
-  const { login } = useAuth();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const { login, loginWithGoogle } = useAuth();
+  const [form, setForm] = useState(
+    import.meta.env.DEV ? { email: 'admin@sitare.org', password: 'admin123' } : { email: '', password: '' }
+  );
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -21,6 +30,21 @@ export default function Login() {
       setError(err.message || 'Unable to sign in');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleGoogle = async (credentialResponse) => {
+    setError('');
+    setGoogleBusy(true);
+    try {
+      await loginWithGoogle(credentialResponse.credential);
+    } catch (err) {
+      // The backend's message is already safe to show as-is (unregistered
+      // account, disabled account, wrong domain) — never a raw token or a
+      // stack trace, whatever actually went wrong on the server.
+      setError(err.message || 'Google sign-in failed. Please try again.');
+    } finally {
+      setGoogleBusy(false);
     }
   };
 
@@ -67,6 +91,29 @@ export default function Login() {
           <Button type="submit" size="lg" loading={busy} className="w-full">
             {busy ? 'Signing in' : 'Sign in'}
           </Button>
+
+          {GOOGLE_ENABLED && (
+            <>
+              <div className="flex items-center gap-3 text-xs text-slate-400">
+                <span className="h-px flex-1 bg-slate-200" />
+                OR
+                <span className="h-px flex-1 bg-slate-200" />
+              </div>
+
+              <div className="flex justify-center">
+                {googleBusy ? (
+                  <p className="py-2 text-sm text-slate-500">Signing in…</p>
+                ) : (
+                  <GoogleLogin
+                    onSuccess={handleGoogle}
+                    onError={() => setError('Google sign-in failed. Please try again.')}
+                    text="continue_with"
+                    width="304"
+                  />
+                )}
+              </div>
+            </>
+          )}
         </form>
 
         <p className="mt-5 text-center text-xs text-slate-400">

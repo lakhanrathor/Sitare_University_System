@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { auditLog } from '../utils/audit.js';
 
 export function signToken(user) {
   return jwt.sign({ sub: String(user._id), role: user.role }, env.jwtSecret, {
@@ -18,18 +19,25 @@ export function verifyToken(token) {
 export const protect = asyncHandler(async (req, _res, next) => {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) throw ApiError.unauthorized('Authentication token missing');
+  if (!token) {
+    auditLog('auth_failed', { reason: 'missing_token', path: req.originalUrl });
+    throw ApiError.unauthorized('Authentication token missing');
+  }
 
   let payload;
   try {
     payload = verifyToken(token);
   } catch {
+    auditLog('auth_failed', { reason: 'invalid_token', path: req.originalUrl });
     throw ApiError.unauthorized('Session expired or invalid. Please sign in again.');
   }
 
   // Section is populated because nearly every timetable view needs its name.
   const user = await User.findById(payload.sub).populate('section', 'name semester');
-  if (!user || !user.isActive) throw ApiError.unauthorized('Account not found or disabled');
+  if (!user || !user.isActive) {
+    auditLog('auth_failed', { reason: 'disabled_or_missing_account', userId: payload.sub });
+    throw ApiError.unauthorized('Account not found or disabled');
+  }
 
   req.user = user;
   next();
@@ -41,6 +49,12 @@ export const authorize =
   (req, _res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
     if (!roles.includes(req.user.role)) {
+      auditLog('authorization_denied', {
+        userId: String(req.user._id),
+        role: req.user.role,
+        required: roles,
+        path: req.originalUrl,
+      });
       return next(ApiError.forbidden(`This action requires: ${roles.join(' or ')}`));
     }
     next();

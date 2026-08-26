@@ -844,7 +844,9 @@ export const updateSubject = asyncHandler(async (req, res) => {
   if (!subject) throw ApiError.notFound('Subject not found');
 
   const { facultyId, ...rest } = req.body;
-  const previous = String(subject.faculty);
+  // A departing lecturer leaves a subject with faculty: null (see purgeUsers) —
+  // that is not a real id, so it must never be cast into a query filter below.
+  const previous = subject.faculty ? String(subject.faculty) : null;
 
   if (facultyId && facultyId !== previous) {
     const faculty = await User.findById(facultyId);
@@ -852,11 +854,14 @@ export const updateSubject = asyncHandler(async (req, res) => {
     subject.faculty = faculty._id;
 
     // The timetable stores the lecturer per period; keep it in step, but leave
-    // any period deliberately overridden to somebody else alone.
-    await TimetableEntry.updateMany(
-      { subject: subject._id, faculty: previous },
-      { $set: { faculty: faculty._id } }
-    );
+    // any period deliberately overridden to somebody else alone. Nothing to
+    // reconcile if the subject had no previous lecturer to begin with.
+    if (previous) {
+      await TimetableEntry.updateMany(
+        { subject: subject._id, faculty: previous },
+        { $set: { faculty: faculty._id } }
+      );
+    }
 
     await notify([faculty._id], {
       type: 'subject:assigned',

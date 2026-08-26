@@ -7,7 +7,7 @@ import Enrollment from '../models/Enrollment.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { putFile, openFile, deleteFiles } from '../services/fileStore.js';
-import { notify } from '../services/notificationService.js';
+import { notify, withdrawNotifications } from '../services/notificationService.js';
 
 /*
  * Course material, shared with a cohort.
@@ -61,14 +61,47 @@ const idOf = (v) => (v ? String(v._id ?? v) : '');
  *
  * A student's view is fixed by their own record — never by a query parameter,
  * or one could read another year's material by editing the URL.
+ *
+ * A faculty member's view is fixed the same way: their own uploads, plus
+ * whatever cohort their own subjects teach. Without this a lecturer saw every
+ * note posted college-wide — someone else's Sem 3 handout showing up for a
+ * teacher who has nothing to do with Sem 3 reads as the notes system leaking,
+ * not as a feature.
+ *
+ * Admin keeps the wider view: the query filters narrow it, but with none
+ * given they see everything, which is what oversight of the whole notes
+ * system requires.
  */
-function scopeFor(user, query) {
+async function scopeFor(user, query) {
   if (user.role === 'student') {
     return {
       semester: user.semester,
       // Their section's material, plus anything addressed to the whole year.
       $or: [{ section: idOf(user.section) || null }, { section: null }],
     };
+  }
+
+  if (user.role === 'faculty') {
+    const taught = await Subject.find({ faculty: user._id, isActive: true })
+      .select('semester section')
+      .lean();
+
+    // A cohort they teach: their own semester, and — when they teach one
+    // specific section — either that section's notes or ones addressed to
+    // the whole year. Teaching a whole undivided year opens every section's
+    // notes in that semester, since there is nothing narrower to teach.
+    const cohortClauses = taught.map((s) =>
+      s.section
+        ? { semester: s.semester, $or: [{ section: s.section }, { section: null }] }
+        : { semester: s.semester }
+    );
+
+    if (!cohortClauses.length) {
+      // Teaches nothing yet: their own uploads are the only thing to show.
+      return { uploadedBy: user._id };
+    }
+
+    return { $or: [{ uploadedBy: user._id }, ...cohortClauses] };
   }
 
   const filter = {};
@@ -80,7 +113,7 @@ function scopeFor(user, query) {
 }
 
 export const listNotes = asyncHandler(async (req, res) => {
-  const notes = await Note.find(scopeFor(req.user, req.query))
+  const notes = await Note.find(await scopeFor(req.user, req.query))
     .populate('section', 'name')
     .populate('subject', 'code name')
     .populate('uploadedBy', 'name')
@@ -175,6 +208,8 @@ export const createNote = asyncHandler(async (req, res) => {
         message: `${title}${subject ? ` · ${subject.code}` : ''} — from ${req.user.name}`,
         link: '/notes',
         createdBy: req.user._id,
+        // Tagged so the notification can be taken back if these are removed.
+        meta: { noteId: String(note._id) },
       });
     }
 
@@ -192,7 +227,13 @@ export const createNote = asyncHandler(async (req, res) => {
   }
 });
 
-/** A note is readable by whoever it was addressed to. */
+/**
+ * A note is readable by whoever it was addressed to — this must mirror
+ * `scopeFor` exactly. That function decides which notes a faculty member's
+ * *list* shows; without the same check here, direct access to one note's id
+ * would reach cohorts a lecturer has nothing to do with, even though the list
+ * they see never surfaced it in the first place.
+ */
 async function loadVisible(user, noteId) {
   const note = await Note.findById(noteId);
   if (!note) throw ApiError.notFound('Those notes no longer exist');
@@ -202,6 +243,20 @@ async function loadVisible(user, noteId) {
     // No section means the whole year; otherwise it has to be their own.
     const forThem = !note.section || idOf(note.section) === idOf(user.section);
     if (!sameYear || !forThem) throw ApiError.forbidden('Those notes are not for your class');
+  }
+
+  if (user.role === 'faculty' && String(note.uploadedBy) !== String(user._id)) {
+    const taught = await Subject.find({ faculty: user._id, isActive: true })
+      .select('semester section')
+      .lean();
+    const coversCohort = taught.some(
+      (s) =>
+        s.semester === note.semester &&
+        // Teaching the whole undivided year opens every section in it; teaching
+        // one section opens that section's notes plus whole-year ones.
+        (!s.section || !note.section || idOf(s.section) === idOf(note.section))
+    );
+    if (!coversCohort) throw ApiError.forbidden('Those notes are not for a class you teach');
   }
   return note;
 }
@@ -243,6 +298,8 @@ export const deleteNote = asyncHandler(async (req, res) => {
   }
 
   await deleteFiles((note.attachments || []).map((a) => a.fileId));
+  // Nobody should keep being pointed at material that is gone.
+  await withdrawNotifications({ type: 'note:published', 'meta.noteId': String(note._id) });
   await note.deleteOne();
 
   res.json({ success: true, message: 'Notes removed', data: { id: String(note._id) } });

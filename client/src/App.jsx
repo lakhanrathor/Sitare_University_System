@@ -16,6 +16,7 @@ import People from './pages/admin/People';
 import StudentProfile from './pages/admin/StudentProfile';
 import StudentLeave from './pages/student/Leave';
 import Notes from './pages/notes/Notes';
+import Exams from './pages/exams/Exams';
 import Academics from './pages/admin/Academics';
 import Swaps from './pages/swaps/Swaps';
 
@@ -85,6 +86,9 @@ export default function App() {
 
         {/* Course material: lecturers publish, their class downloads. */}
         <Route path="notes" element={<Notes />} />
+
+        {/* Exam timetables: the office publishes, everyone else reads. */}
+        <Route path="exams" element={<Exams />} />
 
         {/* A student tells the office why they were away. */}
         <Route

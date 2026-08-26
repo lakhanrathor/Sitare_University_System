@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { protect, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { uploadPdf } from '../middleware/upload.js';
+import { auditLog } from '../utils/audit.js';
 import { listLeaveDocuments } from '../controllers/leaveController.js';
 import {
   getOverview,
@@ -34,6 +35,18 @@ const router = Router();
 
 /* Everything here is administration — no other role may enter. */
 router.use(protect, authorize('admin'));
+
+/*
+ * A single chokepoint for "what did an admin change" — every write in this
+ * router passes through here, so no individual handler needs its own audit
+ * call. Reads are noise for this purpose and are left out.
+ */
+router.use((req, _res, next) => {
+  if (req.method !== 'GET') {
+    auditLog('admin_action', { userId: String(req.user._id), method: req.method, path: req.path });
+  }
+  next();
+});
 
 router.get('/overview', getOverview);
 

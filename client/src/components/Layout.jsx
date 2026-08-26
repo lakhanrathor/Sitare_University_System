@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   GraduationCap, LogOut, CalendarCheck, LayoutGrid, Menu, X, CalendarDays, Repeat,
-  Users, BookOpen, CalendarRange, FileText,
+  Users, BookOpen, CalendarRange, FileText, CalendarClock,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -14,12 +14,14 @@ const NAV = {
     { to: '/', label: 'My Attendance', icon: CalendarCheck, end: true },
     { to: '/timetable', label: 'Timetable', icon: CalendarDays },
     { to: '/notes', label: 'Notes', icon: FileText },
+    { to: '/exams', label: 'Exams', icon: CalendarClock },
     { to: '/leave', label: 'Leave', icon: CalendarRange },
   ],
   faculty: [
     { to: '/', label: 'My Subjects', icon: LayoutGrid, end: true },
     { to: '/timetable', label: 'Timetable', icon: CalendarDays },
     { to: '/notes', label: 'Notes', icon: FileText },
+    { to: '/exams', label: 'Exams', icon: CalendarClock },
     { to: '/swaps', label: 'Swaps', icon: Repeat },
   ],
   admin: [
@@ -28,6 +30,7 @@ const NAV = {
     { to: '/admin/academics', label: 'Academics', icon: BookOpen },
     { to: '/timetable', label: 'Timetable', icon: CalendarDays },
     { to: '/notes', label: 'Notes', icon: FileText },
+    { to: '/exams', label: 'Exams', icon: CalendarClock },
     { to: '/swaps', label: 'Approvals', icon: Repeat },
   ],
 };
@@ -108,7 +111,6 @@ export default function Layout() {
                   Sitare University
                 </span>
                 <span className="block text-[11px] font-medium text-slate-500">
-                  Campus Portal
                 </span>
               </span>
             </Link>

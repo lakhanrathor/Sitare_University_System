@@ -47,6 +47,20 @@ export function NotificationProvider({ children }) {
     });
   });
 
+  /*
+   * The thing a notification pointed at was withdrawn, so the notification
+   * goes too — otherwise the bell keeps advertising a page that will show
+   * nothing, which reads as the page being broken.
+   */
+  useSocketEvent('notification:removed', ({ ids }) => {
+    const gone = new Set(ids || []);
+    setItems((prev) => {
+      const dropped = prev.filter((n) => gone.has(n.id) && !n.read).length;
+      if (dropped) setUnread((u) => Math.max(0, u - dropped));
+      return prev.filter((n) => !gone.has(n.id));
+    });
+  });
+
   const markRead = useCallback(async (id) => {
     setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
     setUnread((u) => Math.max(0, u - 1));

@@ -40,6 +40,34 @@ export async function notify(userIds, payload) {
   return docs;
 }
 
+/**
+ * Take back notifications about something that no longer exists.
+ *
+ * A notification is a pointer, not a record. When the thing it points at is
+ * withdrawn the pointer has to go with it, or a student is left being told
+ * about an exam timetable that is not on their page — which reads as the page
+ * being broken rather than the item being deleted.
+ */
+export async function withdrawNotifications(filter) {
+  const doomed = await Notification.find(filter).select('_id user').lean();
+  if (!doomed.length) return 0;
+
+  await Notification.deleteMany({ _id: { $in: doomed.map((d) => d._id) } });
+
+  // Drop it from anyone's open bell, rather than waiting for a reload.
+  const byUser = new Map();
+  for (const d of doomed) {
+    const key = String(d.user);
+    if (!byUser.has(key)) byUser.set(key, []);
+    byUser.get(key).push(String(d._id));
+  }
+  for (const [user, ids] of byUser) {
+    emitToUsers([user], 'notification:removed', { ids });
+  }
+
+  return doomed.length;
+}
+
 /** Everyone who should hear about a schedule change on the shared grid. */
 export async function facultyAndAdminIds({ exclude = [] } = {}) {
   const users = await User.find({ role: { $in: ['faculty', 'admin'] }, isActive: true })

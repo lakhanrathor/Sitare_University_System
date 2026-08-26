@@ -5,7 +5,7 @@ import TimetableEntry from '../models/TimetableEntry.js';
 import { sectionLabel } from '../models/Section.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { toUTCDate, todayKey, dayOfWeek, occurrenceDateFor } from '../utils/date.js';
+import { toUTCDate, todayKey, dayOfWeek, weekDates } from '../utils/date.js';
 import { dayName } from '../config/slots.js';
 import {
   moveAttendanceSession,
@@ -424,6 +424,7 @@ export const decideSwap = asyncHandler(async (req, res) => {
     {
       ...common,
       kind: 'move',
+      timetable: fromEntry.timetable,
       date: toUTCDate(swap.fromDateKey),
       dateKey: swap.fromDateKey,
       entry: fromEntry._id,
@@ -441,6 +442,7 @@ export const decideSwap = asyncHandler(async (req, res) => {
     {
       ...common,
       kind: 'move',
+      timetable: toEntry.timetable,
       date: toUTCDate(swap.toDateKey),
       dateKey: swap.toDateKey,
       entry: toEntry._id,
@@ -658,35 +660,32 @@ export const listSwapCandidates = asyncHandler(async (req, res) => {
     });
   }
 
-  const entries = await TimetableEntry.find({ timetable: mine.timetable, kind: 'lecture' })
-    .populate('subject', 'code name faculty')
-    .populate('section', 'name')
-    .populate('faculty', 'name')
-    .lean();
-
-  const others = entries
-    .filter((e) => {
-      const f = e.faculty?._id || e.subject?.faculty;
-      return f && String(f) !== myFaculty;
-    })
-    .map((e) => ({ entry: e, date: occurrenceDateFor(e.dayOfWeek, date) }));
-
-  // One resolve pass over every date involved, then check in memory.
-  const dates = [...new Set([date, ...others.map((o) => o.date)])];
+  /*
+   * Candidates are read off what is actually happening this week — not the
+   * recurring grid — so a class a swap or a shift already relocated is
+   * offered (and shown) at its real date, not the slot it moved away from.
+   */
+  const dates = [...new Set([date, ...weekDates(date)])];
   const { byDate } = await resolveOccurrences(dates);
 
-  const liveAt = (d, slot) =>
-    (byDate[d] || []).filter(
-      (o) => o.slot === slot && !['moved-out', 'cancelled'].includes(o.origin)
-    );
+  const liveOn = (d) =>
+    (byDate[d] || []).filter((o) => !['moved-out', 'cancelled'].includes(o.origin));
+  const liveAt = (d, slot) => liveOn(d).filter((o) => o.slot === slot);
+
+  const others = dates
+    .flatMap(liveOn)
+    .filter((o) => o.kind === 'lecture')
+    .filter((o) => o.date >= todayKey())
+    .filter((o) => o.entryId !== String(mine._id))
+    .filter((o) => o.faculty && o.faculty.id !== myFaculty);
 
   const slotLabel = await slotNamer(mine.subject?.semester || mine.section?.semester);
 
   const candidates = others
-    .map(({ entry: e, date: cDate }) => {
-      const theirSection = e.section ? String(e.section._id) : null;
-      const theirFaculty = e.faculty?._id || e.subject?.faculty;
-      const ignore = new Set([String(mine._id), String(e._id)]);
+    .map((o) => {
+      const theirSection = o.section?.id || null;
+      const theirFaculty = o.faculty.id;
+      const ignore = new Set([String(mine._id), o.entryId]);
 
       /*
        * A cohort being busy rules a swap out, and so does a lecturer already
@@ -694,7 +693,7 @@ export const listSwapCandidates = asyncHandler(async (req, res) => {
        * that is a combined class, and both registers can still be taken.
        * Candidates all come from one timetable, so they share `mySemester`.
        */
-      const otherYear = (o) => o.semester != null && Number(o.semester) !== Number(mySemester);
+      const otherYear = (x) => x.semester != null && Number(x.semester) !== Number(mySemester);
 
       /*
        * An undivided semester has no section id: that cohort *is* the year, so
@@ -702,40 +701,40 @@ export const listSwapCandidates = asyncHandler(async (req, res) => {
        * divided cohort clashes with its own section, or with a whole-year
        * period that swallows it.
        */
-      const hits = (o, sectionId) =>
+      const hits = (x, sectionId) =>
         sectionId
-          ? o.section?.id === sectionId || (!o.section && !otherYear(o))
-          : !otherYear(o);
+          ? x.section?.id === sectionId || (!x.section && !otherYear(x))
+          : !otherYear(x);
 
-      const cohortName = (o) => (o.section?.name ? `Section ${o.section.name}` : 'That year');
+      const cohortName = (x) => (x.section?.name ? `Section ${x.section.name}` : 'That year');
 
       const clashes = [];
       // My class taking their period.
-      for (const o of liveAt(cDate, e.slot)) {
-        if (o.entryId && ignore.has(o.entryId)) continue;
-        if (hits(o, mySection)) clashes.push(`${cohortName(o)} is busy then`);
-        else if (myFaculty && o.faculty?.id === myFaculty && otherYear(o))
-          clashes.push(`You already teach semester ${o.semester} then`);
+      for (const x of liveAt(o.date, o.slot)) {
+        if (x.entryId && ignore.has(x.entryId)) continue;
+        if (hits(x, mySection)) clashes.push(`${cohortName(x)} is busy then`);
+        else if (myFaculty && x.faculty?.id === myFaculty && otherYear(x))
+          clashes.push(`You already teach semester ${x.semester} then`);
       }
       // Their class taking my period.
-      for (const o of liveAt(date, mine.slot)) {
-        if (o.entryId && ignore.has(o.entryId)) continue;
-        if (hits(o, theirSection)) clashes.push(`${cohortName(o)} is busy in your period`);
-        else if (theirFaculty && o.faculty?.id === String(theirFaculty) && otherYear(o))
-          clashes.push(`${e.faculty?.name || 'They'} teach semester ${o.semester} in your period`);
+      for (const x of liveAt(date, mine.slot)) {
+        if (x.entryId && ignore.has(x.entryId)) continue;
+        if (hits(x, theirSection)) clashes.push(`${cohortName(x)} is busy in your period`);
+        else if (theirFaculty && x.faculty?.id === theirFaculty && otherYear(x))
+          clashes.push(`${o.faculty.name || 'They'} teach semester ${x.semester} in your period`);
       }
 
       return {
-        entryId: String(e._id),
-        dayOfWeek: e.dayOfWeek,
-        day: dayName(e.dayOfWeek),
-        date: cDate,
-        slot: e.slot,
-        slotLabel: slotLabel(e.slot),
-        section: e.section?.name,
-        subject: e.subject ? { code: e.subject.code, name: e.subject.name } : null,
-        title: e.title,
-        faculty: e.faculty?.name || null,
+        entryId: o.entryId,
+        dayOfWeek: dayOfWeek(o.date),
+        day: dayName(dayOfWeek(o.date)),
+        date: o.date,
+        slot: o.slot,
+        slotLabel: slotLabel(o.slot),
+        section: o.section?.name,
+        subject: o.subject ? { code: o.subject.code, name: o.subject.name } : null,
+        title: o.title,
+        faculty: o.faculty.name || null,
         feasible: clashes.length === 0,
         blockedBy: clashes[0] || null,
       };

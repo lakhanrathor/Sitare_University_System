@@ -14,6 +14,8 @@ import {
   moveAttendanceSession,
   cancelAttendanceSession,
   slotsForSemester,
+  getPublishedTimetable,
+  slotsOf,
   labelOf,
 } from '../services/timetableService.js';
 import {
@@ -152,8 +154,9 @@ export const bookExtraClass = asyncHandler(async (req, res) => {
   const section = await Section.findById(sectionId);
   if (!section) throw ApiError.notFound('Section not found');
 
+  const timetable = await getPublishedTimetable(section.semester);
   const slotLabel = await slotNamer(section.semester);
-  const periods = await slotsForSemester(section.semester);
+  const periods = slotsOf(timetable);
   if (!periods.some((p) => p.slot === Number(slot))) {
     throw ApiError.badRequest('That period is not on this semester’s timetable');
   }
@@ -204,6 +207,7 @@ export const bookExtraClass = asyncHandler(async (req, res) => {
 
   const change = await ScheduleChange.create({
     kind: 'extra',
+    timetable: timetable?._id || null,
     date: toUTCDate(date),
     dateKey: date,
     section: section._id,
@@ -327,6 +331,7 @@ export const moveClass = asyncHandler(async (req, res) => {
 
   const change = await ScheduleChange.create({
     kind: 'move',
+    timetable: entry.timetable,
     date: toUTCDate(date),
     dateKey: date,
     entry: entry._id,
@@ -422,6 +427,7 @@ export const cancelClass = asyncHandler(async (req, res) => {
 
   const change = await ScheduleChange.create({
     kind: 'cancel',
+    timetable: entry.timetable,
     date: toUTCDate(date),
     dateKey: date,
     entry: entry._id,

@@ -15,6 +15,22 @@ const scheduleChangeSchema = new mongoose.Schema(
   {
     kind: { type: String, enum: CHANGE_KINDS, required: true, index: true },
 
+    /**
+     * Which published timetable this change belongs to. 'move' and 'cancel'
+     * already imply it through 'entry', but 'extra' has no entry to imply it
+     * from — an extra class is not on the recurring grid at all. Without this,
+     * resolving one semester's week pulls in every OTHER semester's extra
+     * bookings too: a change is otherwise found by date and section alone, and
+     * a section-less (whole-year) extra has a section of null, which matches
+     * every semester's query just as readily as its own.
+     */
+    timetable: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Timetable',
+      default: null,
+      index: true,
+    },
+
     /** The date the change applies to — the ORIGINAL date for move/cancel. */
     date: { type: Date, required: true },
     dateKey: { type: String, required: true, index: true },

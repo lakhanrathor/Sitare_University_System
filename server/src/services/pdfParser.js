@@ -380,6 +380,90 @@ const columnFor = (x, bounds) => {
  * Instead the period labels define horizontal bands, the column headers define
  * vertical ones, and each run simply falls into the box it is drawn in.
  */
+/**
+ * How far past the last real period a band can run before it is almost
+ * certainly no longer the grid at all.
+ *
+ * A period label only marks where a band STARTS; nothing marks where the
+ * last one ends. Every earlier band already ends at the midpoint to the next
+ * label, so the same spacing is the one honest estimate for the last band
+ * too - one more period's worth of height, not the rest of the page. Without
+ * this the last period has no upper bound whatsoever, and anything printed
+ * below the grid - a legend with no header row, a room-allocation note - gets
+ * read as if it were that period's own class.
+ */
+function estimateGridEnd(anchors) {
+  if (anchors.length < 2) return null;
+  const gaps = [];
+  for (let i = 0; i < anchors.length - 1; i += 1) gaps.push(anchors[i + 1].y - anchors[i].y);
+  gaps.sort((a, b) => a - b);
+  const medianGap = gaps[Math.floor(gaps.length / 2)];
+  return anchors[anchors.length - 1].y + medianGap;
+}
+
+/**
+ * Every period label in the file, independent of where the grid is judged to
+ * end - the label pattern itself (HH:MM-HH:MM in the time gutter) is what
+ * makes a row an anchor, so this needs no boundary to already be correct.
+ * Used before the boundary exists, to work one out.
+ */
+function findAnchors(rows, header) {
+  const { columns, headerRowIndex } = header;
+  const pitch = columns.length > 1 ? columns[1].center - columns[0].center : columns[0].center * 2;
+  const gutterEdge = columns[0].center - pitch / 2;
+  const startY = rows[headerRowIndex].y;
+
+  const anchors = [];
+  for (const row of rows) {
+    if (row.y <= startY) continue;
+    const timeItem = row.items.find(
+      (it) => it.x + it.width / 2 < gutterEdge && readPeriodLabel(it.text)
+    );
+    if (!timeItem) continue;
+    anchors.push({ y: timeItem.y, isBreak: isBreakRow(row.text) });
+  }
+  anchors.sort((a, b) => a.y - b.y);
+  return anchors;
+}
+
+/**
+ * A subject/faculty legend with no printed "Subject" / "Faculty" heading at
+ * all - the institute simply lists the pairs straight after the grid.
+ *
+ * Nothing marks where such a table begins except that it is the first real
+ * content once the grid itself has ended, so that boundary is estimated
+ * first (see estimateGridEnd). The two columns are then found the same way a
+ * person would read them: each row's own first gap between one run of text
+ * and the next is its subject/faculty boundary, and the typical value of
+ * that gap across every row is trusted as the column split - capped well
+ * short of a page width, so an unrelated table printed further along the
+ * same row (a room-allocation note, say) cannot be mistaken for a second
+ * legend column and does not shift the split at all.
+ */
+function findHeaderlessLegend(rows, estimatedEndY) {
+  if (estimatedEndY == null) return null;
+
+  const startIndex = rows.findIndex((r) => r.y >= estimatedEndY && r.items.length > 0);
+  if (startIndex === -1) return null;
+
+  const midpoints = [];
+  for (let i = startIndex; i < rows.length; i += 1) {
+    const sorted = [...rows[i].items].sort((a, b) => a.x - b.x);
+    if (sorted.length < 2) continue;
+    const gap = sorted[1].x - (sorted[0].x + sorted[0].width);
+    if (gap > 3 && gap < 150) {
+      midpoints.push((sorted[0].x + sorted[0].width + sorted[1].x) / 2);
+    }
+  }
+  if (!midpoints.length) return null;
+
+  midpoints.sort((a, b) => a - b);
+  const split = midpoints[Math.floor(midpoints.length / 2)];
+
+  const legend = readLegend(rows, startIndex, { subject: split - 1, faculty: split + 1 });
+  return legend.length ? { legend, startIndex } : null;
+}
+
 function parseGrid(rows, header, catalogue, legendIndex) {
   const { columns, bounds, headerRowIndex } = header;
 
@@ -423,6 +507,14 @@ function parseGrid(rows, header, catalogue, legendIndex) {
 
   if (!anchors.length) return { records: [], periods: [], lunch: null };
 
+  /*
+   * The last period has no next label to bound it, so without a legend to
+   * mark where the grid actually stops it would otherwise run to the bottom
+   * of the page. One more period's worth of height, estimated from every
+   * real gap already seen, is a far safer edge than none at all.
+   */
+  const cappedEndY = Math.min(endY, estimateGridEnd(anchors) ?? Infinity);
+
   // A band runs to the midpoint between its anchor and the next.
   const bandEdges = [];
   for (let i = 0; i < anchors.length - 1; i += 1) {
@@ -460,7 +552,7 @@ function parseGrid(rows, header, catalogue, legendIndex) {
    */
   const columnRuns = columns.map(() => []);
   for (const row of rows) {
-    if (row.y <= startY || row.y >= endY) continue;
+    if (row.y <= startY || row.y >= cappedEndY) continue;
     for (const it of row.items) {
       // The time gutter holds labels, never classes.
       if (it.x + it.width / 2 < gutterEdge) continue;
@@ -657,8 +749,25 @@ export async function parseTimetablePDF(buffer, catalogue = {}) {
   }
 
   // The legend, if present, both ends the grid and names the lecturers.
-  const legendAt = findLegendRow(rows, header.headerRowIndex + 1);
-  const legend = legendAt ? readLegend(rows, legendAt.index + 1, legendAt) : [];
+  let legendAt = findLegendRow(rows, header.headerRowIndex + 1);
+  let legend = legendAt ? readLegend(rows, legendAt.index + 1, legendAt) : [];
+
+  /*
+   * Some institutes print the same subject/faculty table with no "Subject" /
+   * "Faculty" heading at all - just the pairs, straight after the grid. A
+   * table needs no label to be read, only its own two columns, so the same
+   * legend is looked for in that shape before giving up on it. Without this,
+   * every one of those subjects stays unknown, and every cell naming one
+   * comes back as a bare event instead of the lecture it actually is.
+   */
+  if (!legendAt) {
+    const anchors = findAnchors(rows, header);
+    const fallback = findHeaderlessLegend(rows, estimateGridEnd(anchors));
+    if (fallback) {
+      legendAt = { index: fallback.startIndex };
+      legend = fallback.legend;
+    }
+  }
 
   // Subjects printed in the legend are known even if they are not yet in the
   // database — that is how a first upload can name its own subjects.

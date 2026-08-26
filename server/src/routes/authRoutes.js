@@ -4,9 +4,11 @@ import { validate } from '../middleware/validate.js';
 import { protect } from '../middleware/auth.js';
 import {
   login,
+  googleLogin,
   me,
   changePassword,
   loginSchema,
+  googleLoginSchema,
   changePasswordSchema,
 } from '../controllers/authController.js';
 
@@ -36,7 +38,22 @@ const loginLimiter = rateLimit({
   },
 });
 
+/*
+ * A Google credential cannot be brute-forced the way a password can — there
+ * is no guessable secret, only a signed token Google issued — so this exists
+ * to cap verification cost under abuse, not to catch guessing. Keyed by IP
+ * since the email is not known until the token is verified.
+ */
+const googleLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many sign-in attempts. Try again in a few minutes.' },
+});
+
 router.post('/login', loginLimiter, validate(loginSchema), login);
+router.post('/google', googleLoginLimiter, validate(googleLoginSchema), googleLogin);
 router.get('/me', protect, me);
 router.patch('/password', protect, validate(changePasswordSchema), changePassword);
 

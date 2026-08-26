@@ -42,13 +42,24 @@ export function AuthProvider({ children }) {
     return u;
   }, []);
 
+  // Same shape as `login`: store the token, set the user, let the router's
+  // own role-based redirect take it from there.
+  const loginWithGoogle = useCallback(async (credential) => {
+    const { token, user: u } = await api.googleLogin(credential);
+    tokenStore.set(token);
+    setUser(u);
+    return u;
+  }, []);
+
   const logout = useCallback(() => {
     tokenStore.clear();
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, loading, login, loginWithGoogle, logout }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 

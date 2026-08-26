@@ -21,6 +21,53 @@ import AttendanceDelegation from '../models/AttendanceDelegation.js';
  * The classes this caller is standing in on for `subjectId`, or null when the
  * subject is simply theirs (or they are an admin) and no narrowing applies.
  */
+/**
+ * The periods this subject actually runs in on one date — the grid plus any
+ * one-off moves and extras, minus anything cancelled or moved away.
+ *
+ * Used to bound "apply to my other classes today": a period the subject does
+ * not sit in is not a class, and recording one would add to the denominator a
+ * lesson that never took place.
+ */
+async function slotsRunningOn(subject, dateKey) {
+  const { byDate } = await resolveOccurrences([dateKey], {
+    sectionId: subject.section ? String(subject.section) : undefined,
+    semester: subject.semester,
+  });
+  const live = (byDate[dateKey] || []).filter(
+    (o) =>
+      o.subject &&
+      String(o.subject.id) === String(subject._id) &&
+      !['cancelled', 'moved-out'].includes(o.origin) &&
+      // Office hours are not a class — nobody is enrolled to attend them, so
+      // they cannot be one of the periods a register is applied across.
+      o.kind !== 'office-hours'
+  );
+  return new Set(live.map((o) => o.slot));
+}
+
+/**
+ * The kind of period this subject has, at one exact slot, on one date.
+ *
+ * Distinguishes a slot the grid genuinely marks as office hours from an
+ * ordinary lecture, so marking attendance against it can be refused before
+ * anything is written — not just left out of the picker that offers slots.
+ */
+async function classKindOn(subject, dateKey, slot) {
+  const { byDate } = await resolveOccurrences([dateKey], {
+    sectionId: subject.section ? String(subject.section) : undefined,
+    semester: subject.semester,
+  });
+  const hit = (byDate[dateKey] || []).find(
+    (o) =>
+      o.subject &&
+      String(o.subject.id) === String(subject._id) &&
+      o.slot === Number(slot) &&
+      !['cancelled', 'moved-out'].includes(o.origin)
+  );
+  return hit?.kind || null;
+}
+
 async function standInClasses(user, subjectId) {
   if (user.role !== 'faculty') return null;
   const subject = await Subject.findById(subjectId).select('faculty').lean();
@@ -48,6 +95,12 @@ const dateKeySchema = z
 export const markAttendanceSchema = z.object({
   date: dateKeySchema,
   slot: z.number().int().min(1).max(12).optional().default(1),
+  /**
+   * Other periods of the same subject on the same date that this one register
+   * also covers — a block timetabled across two or more slots. Each is checked
+   * against the day's real classes before anything is written.
+   */
+  alsoSlots: z.array(z.number().int().min(1).max(12)).max(11).optional().default([]),
   topic: z.string().max(200).optional().default(''),
   records: z
     .array(
@@ -116,10 +169,29 @@ export const getMySubjectHistory = asyncHandler(async (req, res) => {
   });
 });
 
-/** Faculty/admin view of any student's summary. */
+/**
+ * Faculty/admin view of a student's summary.
+ *
+ * Admin is unrestricted. Faculty are not: this returns every subject the
+ * student takes, including ones taught by someone else, so a lecturer with no
+ * connection to this student must not be able to pull it up by id alone —
+ * only someone who actually teaches at least one subject they are enrolled in.
+ */
 export const getStudentAttendance = asyncHandler(async (req, res) => {
   const student = await User.findById(req.params.studentId);
   if (!student || student.role !== 'student') throw ApiError.notFound('Student not found');
+
+  if (req.user.role === 'faculty') {
+    const mySubjects = await Subject.find({ faculty: req.user._id, isActive: true })
+      .select('_id')
+      .lean();
+    const shared = await Enrollment.exists({
+      student: student._id,
+      isActive: true,
+      subject: { $in: mySubjects.map((s) => s._id) },
+    });
+    if (!shared) throw ApiError.forbidden('You do not teach a subject this student takes');
+  }
 
   const summary = await getStudentSummary(student._id);
   res.json({
@@ -217,6 +289,9 @@ export const listSubjectOccurrences = asyncHandler(async (req, res) => {
       if (!o.subject || String(o.subject.id) !== String(subject._id)) continue;
       // A cancelled or relocated class is not something to record here.
       if (o.origin === 'cancelled' || o.origin === 'moved-out') continue;
+      // Office hours are not a class — nobody is enrolled to sit them, so
+      // there is no register for a teacher to take.
+      if (o.kind === 'office-hours') continue;
       map.set(`${o.date}|${o.slot}`, {
         date: o.date,
         slot: o.slot,
@@ -356,15 +431,56 @@ export const getAttendanceSheet = asyncHandler(async (req, res) => {
  * Create-or-update a class session and its attendance in one call.
  * Recording a session is exactly what increments the denominator, so a class
  * only counts once a faculty member has actually taken attendance for it.
+ *
+ * `alsoSlots` lets one register cover a block of periods — a lab timetabled
+ * across three of them is one sitting, and asking the teacher to tick the same
+ * names three times is busywork. Every period still becomes its own session,
+ * so the conducted count reflects what the timetable says was held.
  */
 export const markAttendance = asyncHandler(async (req, res) => {
-  const { date, slot, topic, records } = req.body;
+  const { date, slot, topic, records, alsoSlots } = req.body;
   // Per class, not per subject — a stand-in may only save the one handed over.
   const subject = await assertRegisterAccess(req.user, req.params.subjectId, date, slot);
 
   if (isFutureKey(date)) {
     throw ApiError.badRequest('Attendance cannot be recorded for a future date');
   }
+
+  /*
+   * Office hours are not a class — nobody is enrolled to sit them, so there is
+   * no register to take. Checked against the grid rather than trusted from the
+   * client, so a stale picker or a direct call cannot slip one through.
+   */
+  const primaryKind = await classKindOn(subject, date, slot);
+  if (primaryKind === 'office-hours') {
+    throw ApiError.badRequest(
+      'This period is scheduled as office hours, not a class — there is no attendance to take.'
+    );
+  }
+
+  /*
+   * Every extra period is checked as strictly as the first. Access is granted
+   * per class, so a stand-in handed one period must not reach the rest of the
+   * day through this — and a slot the subject does not actually run in would
+   * invent a class that never happened, inflating the denominator.
+   */
+  const extra = [...new Set((Array.isArray(alsoSlots) ? alsoSlots : []).map(Number))].filter(
+    (s) => Number.isInteger(s) && s !== Number(slot)
+  );
+
+  if (extra.length) {
+    const running = await slotsRunningOn(subject, date);
+    for (const s of extra) {
+      if (!running.has(s)) {
+        throw ApiError.badRequest(
+          `${subject.code} does not run in period ${s} on ${date}, so attendance cannot be recorded for it.`
+        );
+      }
+      await assertRegisterAccess(req.user, req.params.subjectId, date, s);
+    }
+  }
+
+  const slotsToWrite = [Number(slot), ...extra].sort((a, b) => a - b);
 
   const enrollments = await Enrollment.find({ subject: subject._id, isActive: true })
     .select('student')
@@ -392,37 +508,57 @@ export const markAttendance = asyncHandler(async (req, res) => {
     };
   });
 
-  const session = await ClassSession.findOneAndUpdate(
-    { subject: subject._id, dateKey: date, slot },
-    {
-      $setOnInsert: { subject: subject._id, date: toUTCDate(date), dateKey: date, slot },
-      $set: { faculty: subject.faculty, topic: topic || '', status: 'completed' },
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-
-  await Attendance.bulkWrite(
-    finalRecords.map((r) => ({
-      updateOne: {
-        filter: { session: session._id, student: new mongoose.Types.ObjectId(r.studentId) },
-        update: {
-          $set: { status: r.status, remark: r.remark, markedBy: req.user._id },
-          $setOnInsert: {
-            session: session._id,
-            subject: subject._id,
-            student: new mongoose.Types.ObjectId(r.studentId),
-          },
-        },
-        upsert: true,
-      },
-    })),
-    { ordered: false }
-  );
-
   const presentCount = finalRecords.filter((r) => PRESENT_STATUSES.includes(r.status)).length;
-  session.presentCount = presentCount;
-  session.totalMarked = finalRecords.length;
-  await session.save();
+
+  /** Write this register against one period. */
+  const writeSession = async (targetSlot) => {
+    const session = await ClassSession.findOneAndUpdate(
+      { subject: subject._id, dateKey: date, slot: targetSlot },
+      {
+        $setOnInsert: {
+          subject: subject._id,
+          date: toUTCDate(date),
+          dateKey: date,
+          slot: targetSlot,
+        },
+        $set: { faculty: subject.faculty, topic: topic || '', status: 'completed' },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    await Attendance.bulkWrite(
+      finalRecords.map((r) => ({
+        updateOne: {
+          filter: { session: session._id, student: new mongoose.Types.ObjectId(r.studentId) },
+          update: {
+            $set: { status: r.status, remark: r.remark, markedBy: req.user._id },
+            $setOnInsert: {
+              session: session._id,
+              subject: subject._id,
+              student: new mongoose.Types.ObjectId(r.studentId),
+            },
+          },
+          upsert: true,
+        },
+      })),
+      { ordered: false }
+    );
+
+    session.presentCount = presentCount;
+    session.totalMarked = finalRecords.length;
+    await session.save();
+    return session;
+  };
+
+  /*
+   * A double or triple period is one sitting, and the register is the same for
+   * all of it. Each period still becomes its own session, because the
+   * timetable says three classes were held and the denominator has to agree —
+   * this saves the teacher repeating the work, not the classes themselves.
+   */
+  const sessions = [];
+  for (const s of slotsToWrite) sessions.push(await writeSession(s));
+  const session = sessions.find((s) => s.slot === slot) || sessions[0];
 
   const conducted = await ClassSession.countDocuments({
     subject: subject._id,
@@ -438,6 +574,7 @@ export const markAttendance = asyncHandler(async (req, res) => {
     sessionId: String(session._id),
     date,
     slot,
+    slots: slotsToWrite,
     conducted,
     at: new Date().toISOString(),
   };
@@ -450,11 +587,17 @@ export const markAttendance = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     success: true,
-    message: `Attendance saved for ${date}`,
+    // Say how many classes it covered — a teacher applying one register to a
+    // block should see that all of them were recorded.
+    message:
+      slotsToWrite.length > 1
+        ? `Attendance saved for ${slotsToWrite.length} classes on ${date}`
+        : `Attendance saved for ${date}`,
     data: {
       sessionId: String(session._id),
       date,
       slot,
+      slots: slotsToWrite,
       presentCount,
       absentCount: finalRecords.length - presentCount,
       totalMarked: finalRecords.length,

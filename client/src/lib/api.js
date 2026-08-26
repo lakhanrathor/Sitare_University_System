@@ -17,27 +17,35 @@ export class ApiError extends Error {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * A 5xx carrying no JSON body did not come from the API — our error handler
- * always sends a message. It came from the dev proxy because the server was
- * unreachable, which in practice means it was restarting between the request
- * leaving and the reply coming back.
+ * A 5xx carrying no JSON body did not come from the API at all — our own
+ * error handler always sends a message, on every route, for every kind of
+ * failure. A response with a status but no body means something in front of
+ * the API answered instead: the dev proxy, because the server was mid-restart
+ * and refused the connection. The request never reached a route handler, so
+ * nothing was written — retrying is always safe, on a write exactly as much
+ * as a read.
  */
 const serverUnreachable = (res, payload) => res.status >= 500 && !payload;
+
+// Comfortably outlasts a dev-server restart: Mongo reconnect plus Express and
+// socket.io coming back up has taken several seconds under real load.
+const RETRY_DELAYS_MS = [800, 1500, 2500];
 
 /**
  * @param {object} opts
  * @param {boolean} [opts.repeatable]
- *   Safe to send twice. True for reads; set it on a write only when running it
- *   again cannot double anything up — a parse-and-return preview, a dry run.
- *   A restart mid-flight is then invisible instead of an error the user has to
- *   understand and retry by hand.
+ *   Override the retry decision. Left unset, every request retries on the
+ *   unreachable-server signature above — the check already guarantees nothing
+ *   was written the first time, so there is nothing to double up. Pass
+ *   `false` only for a call where even that should surface immediately
+ *   rather than be retried silently.
  */
 async function request(path, { method = 'GET', body, form, signal, repeatable } = {}) {
   const token = tokenStore.get();
 
   // FormData sets its own multipart boundary — never set Content-Type for it.
   const requestBody = form ?? (body ? JSON.stringify(body) : undefined);
-  const canRepeat = repeatable ?? method === 'GET';
+  const canRepeat = repeatable ?? true;
 
   const send = () =>
     fetch(`/api${path}`, {
@@ -50,23 +58,25 @@ async function request(path, { method = 'GET', body, form, signal, repeatable } 
       ...(requestBody !== undefined ? { body: requestBody } : {}),
     });
 
-  let res = await send();
-  let payload = null;
-  try {
-    payload = await res.json();
-  } catch {
-    /* empty or non-JSON body */
-  }
-
-  // One quiet retry, long enough for a restarting server to bind its port.
-  if (canRepeat && serverUnreachable(res, payload)) {
-    await wait(1200);
-    res = await send();
-    payload = null;
+  const attempt = async () => {
+    const r = await send();
+    let data = null;
     try {
-      payload = await res.json();
+      data = await r.json();
     } catch {
-      /* still nothing */
+      /* empty or non-JSON body */
+    }
+    return { r, data };
+  };
+
+  let { r: res, data: payload } = await attempt();
+
+  // Several quiet retries, each waiting a little longer, before giving up.
+  if (canRepeat) {
+    for (const delay of RETRY_DELAYS_MS) {
+      if (!serverUnreachable(res, payload)) break;
+      await wait(delay);
+      ({ r: res, data: payload } = await attempt());
     }
   }
 
@@ -116,6 +126,8 @@ async function downloadBlob(path, filename) {
 
 export const api = {
   login: (email, password) => request('/auth/login', { method: 'POST', body: { email, password } }),
+  // `credential` is the Google ID token — the whole request, nothing else.
+  googleLogin: (credential) => request('/auth/google', { method: 'POST', body: { credential } }),
   me: () => request('/auth/me'),
 
   subjects: () => request('/subjects'),
@@ -152,8 +164,7 @@ export const api = {
     form.append('semester', String(semester));
     if (file) form.append('file', file);
     if (csv) form.append('csv', csv);
-    // Parses and returns; writes nothing, so a restart can be ridden out.
-    return request('/timetable/preview', { method: 'POST', form, repeatable: true });
+    return request('/timetable/preview', { method: 'POST', form });
   },
   uploadTimetable: ({ file, csv, name, semester, effectiveFrom, publish }) => {
     const form = new FormData();
@@ -222,8 +233,31 @@ export const api = {
     if (file) form.append('file', file);
     if (csv) form.append('csv', csv);
     // A dry run only reports what it would do — safe to send again.
-    return request('/admin/users/import', { method: 'POST', form, repeatable: Boolean(dryRun) });
+    return request('/admin/users/import', { method: 'POST', form });
   },
+
+  /* ---- Exam timetables ---- */
+  exams: (params = {}) => {
+    const q = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null)
+    ).toString();
+    return request(`/exams${q ? `?${q}` : ''}`);
+  },
+  publishExam: ({ title, examType, semester, sectionId, instructions, papers, files }) => {
+    const form = new FormData();
+    form.append('title', title);
+    form.append('examType', examType);
+    form.append('semester', String(semester));
+    if (sectionId) form.append('sectionId', sectionId);
+    form.append('instructions', instructions || '');
+    // Multipart carries no nested structures, so the papers travel as JSON.
+    form.append('papers', JSON.stringify(papers || []));
+    for (const f of files || []) form.append('files', f);
+    return request('/exams', { method: 'POST', form });
+  },
+  deleteExam: (id) => request(`/exams/${id}`, { method: 'DELETE' }),
+  downloadExamFile: (examId, attachmentId, filename) =>
+    downloadBlob(`/exams/${examId}/attachments/${attachmentId}`, filename),
 
   /* ---- Notes: course material shared with a cohort ---- */
   notes: (params = {}) => {
