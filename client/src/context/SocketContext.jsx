@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { tokenStore } from '../lib/api';
+import { tokenStore, API_ORIGIN } from '../lib/api';
 import { useAuth } from './AuthContext';
 
 const SocketContext = createContext(null);
@@ -18,7 +18,14 @@ export function SocketProvider({ children }) {
       return;
     }
 
-    const socket = io({ auth: { token: tokenStore.get() }, transports: ['websocket', 'polling'] });
+    // Empty API_ORIGIN connects same-origin (local dev); `|| undefined` rather
+    // than `''` because socket.io-client treats an explicit empty string as a
+    // literal (invalid) URL, not "use the current origin" the way omitting
+    // the argument does.
+    const socket = io(API_ORIGIN || undefined, {
+      auth: { token: tokenStore.get() },
+      transports: ['websocket', 'polling'],
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => setConnected(true));

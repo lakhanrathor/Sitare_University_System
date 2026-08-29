@@ -4,7 +4,7 @@ import {
   ArrowLeft, Upload, Download, FileText, CheckCircle2, AlertTriangle,
   Trash2, Radio, X, Loader2,
 } from 'lucide-react';
-import { api, tokenStore } from '../../lib/api';
+import { api, tokenStore, API_ORIGIN } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 import { todayKey } from '../../lib/timetable';
 import {
@@ -155,7 +155,7 @@ export default function ManageTimetable() {
   /** Template download needs the auth header, so fetch then save the blob. */
   const downloadTemplate = async (current) => {
     const qs = current ? `?current=true&semester=${semester}` : '';
-    const res = await fetch(`/api/timetable/template${qs}`, {
+    const res = await fetch(`${API_ORIGIN}/api/timetable/template${qs}`, {
       headers: { Authorization: `Bearer ${tokenStore.get()}` },
     });
     if (!res.ok) return notify('Could not download the template', { variant: 'error' });

@@ -1,3 +1,12 @@
+/*
+ * Empty locally (Vite's dev proxy makes `/api` same-origin already). Set to
+ * the API's own absolute origin — e.g. https://sitare-university-system.onrender.com —
+ * only when the client is deployed separately from the API, so neither the
+ * REST calls below nor the socket connection in SocketContext.jsx silently
+ * hit the client's own origin instead.
+ */
+export const API_ORIGIN = import.meta.env.VITE_API_URL || '';
+
 const TOKEN_KEY = 'sitare_erp_token';
 
 export const tokenStore = {
@@ -48,7 +57,7 @@ async function request(path, { method = 'GET', body, form, signal, repeatable } 
   const canRepeat = repeatable ?? true;
 
   const send = () =>
-    fetch(`/api${path}`, {
+    fetch(`${API_ORIGIN}/api${path}`, {
       method,
       signal,
       headers: {
@@ -106,7 +115,7 @@ async function request(path, { method = 'GET', body, form, signal, repeatable } 
  * not a cookie, so the browser would fetch it signed out.
  */
 async function downloadBlob(path, filename) {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_ORIGIN}/api${path}`, {
     headers: { Authorization: `Bearer ${tokenStore.get()}` },
   });
   if (!res.ok) {

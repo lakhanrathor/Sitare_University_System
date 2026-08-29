@@ -34,10 +34,16 @@ const userSchema = new mongoose.Schema(
      * Google's stable subject id for this person, recorded the first time
      * they sign in with Google. It identifies *who signed in*, nothing more —
      * role, section and access still come from the fields above, which only
-     * an admin can change. `sparse` because most accounts sign in with a
-     * password only and never get one.
+     * an admin can change.
+     *
+     * Deliberately no `default: null` — a sparse unique index only excludes a
+     * document where the field is genuinely absent, not one where it is set
+     * to `null`. A default would write a literal `null` onto every account
+     * that has never used Google sign-in, and the second such account would
+     * then collide with the first on this unique index. Leaving the field
+     * unset until `resolveGoogleUser` assigns it is what makes `sparse` work.
      */
-    googleSub: { type: String, default: null, unique: true, sparse: true },
+    googleSub: { type: String, unique: true, sparse: true },
   },
   { timestamps: true }
 );
