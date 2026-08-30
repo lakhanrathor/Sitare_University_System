@@ -391,8 +391,11 @@ export default function TakeAttendance() {
           {noneTakeable ? (
             <InfoNote icon={CalendarClock}>
               None of this subject's classes have been held yet. The next one is{' '}
-              <span className="font-medium text-slate-700">{label(groups.upcoming[0])}</span> — you
-              can record attendance once it has happened.
+              <span className="font-medium text-slate-700">
+                {/* occurrences sort most-recent-first, so the soonest upcoming class is the last one, not the first */}
+                {label(groups.upcoming[groups.upcoming.length - 1])}
+              </span>{' '}
+              — you can record attendance once it has happened.
             </InfoNote>
           ) : (
             <InfoNote>

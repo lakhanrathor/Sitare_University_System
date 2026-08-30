@@ -138,6 +138,8 @@ export const api = {
   // `credential` is the Google ID token — the whole request, nothing else.
   googleLogin: (credential) => request('/auth/google', { method: 'POST', body: { credential } }),
   me: () => request('/auth/me'),
+  changePassword: (currentPassword, newPassword) =>
+    request('/auth/password', { method: 'PATCH', body: { currentPassword, newPassword } }),
 
   subjects: () => request('/subjects'),
   subjectDetail: (id) => request(`/subjects/${id}`),

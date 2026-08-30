@@ -78,10 +78,20 @@ export default function SubjectReport() {
   };
 
   const exportCsv = () => {
+    /*
+     * A roll number is all digits and long enough that Excel silently
+     * reinterprets the cell as a number on open — scientific notation, or the
+     * trailing digits rounded off — regardless of the quotes in the file.
+     * Wrapping it as a text formula is what keeps Excel from doing that; the
+     * escaping below still renders it as a normal quoted CSV field.
+     */
+    const asExcelText = (v) => `="${String(v ?? '').replace(/"/g, '""')}"`;
+    const escapeCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
     const rows = [
       ['Roll Number', 'Name', 'Present', 'Absent', 'Conducted', 'Percentage'],
       ...detail.students.map((s) => [
-        s.rollNumber,
+        asExcelText(s.rollNumber),
         s.name,
         s.present,
         s.absent,
@@ -89,7 +99,7 @@ export default function SubjectReport() {
         s.percentage === null ? 'N/A' : s.percentage,
       ]),
     ];
-    const csv = rows.map((r) => r.map((c) => `"${String(c ?? '')}"`).join(',')).join('\n');
+    const csv = rows.map((r) => r.map(escapeCell).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     const a = document.createElement('a');
     a.href = url;
