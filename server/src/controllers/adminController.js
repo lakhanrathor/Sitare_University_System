@@ -632,8 +632,37 @@ export const listSections = asyncHandler(async (_req, res) => {
 
 export const createSection = asyncHandler(async (req, res) => {
   const { semester, department } = req.body;
-  const name = (req.body.name || '').trim().toUpperCase();
+  const raw = (req.body.name || '').trim();
 
+  /*
+   * "A, B" names two cohorts, not one section called "A, B" — a section is
+   * always a single roster. Splitting on commas here is what lets an admin
+   * create both sections in one step instead of opening this dialog twice;
+   * one plain name (or a blank one, for an undivided semester) behaves
+   * exactly as before.
+   */
+  const names = [...new Set(raw.split(',').map((n) => n.trim().toUpperCase()).filter(Boolean))];
+
+  if (names.length > 1) {
+    const conflicts = await Section.find({ name: { $in: names }, semester, department })
+      .select('name')
+      .lean();
+    if (conflicts.length) {
+      const list = conflicts.map((c) => c.name).join(', ');
+      throw ApiError.conflict(
+        `Section${conflicts.length > 1 ? 's' : ''} ${list} already exist${conflicts.length > 1 ? '' : 's'} in semester ${semester}`
+      );
+    }
+
+    const created = await Section.insertMany(names.map((name) => ({ name, semester, department })));
+    return res.status(201).json({
+      success: true,
+      message: `${created.map((s) => sectionLabel(s)).join(', ')} created for semester ${semester}`,
+      data: created.map((s) => ({ id: String(s._id), name: s.name, semester: s.semester })),
+    });
+  }
+
+  const name = names[0] || '';
   const exists = await Section.findOne({ name, semester, department });
   if (exists) {
     throw ApiError.conflict(
