@@ -333,7 +333,11 @@ export default function Academics() {
                       Sem {s.semester} · {sectionShort(s.section)}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
-                      {s.faculty?.name ?? (
+                      {/* facultyLabel folds in anyone covering a period of this
+                          subject on the live timetable, not just its own
+                          lecturer — e.g. "Mr Ankit Mehta/Dr Anuja Agarwal"
+                          when Thursday was handed to someone else. */}
+                      {s.facultyLabel ?? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                           <AlertTriangle className="h-3 w-3" />
                           Unassigned

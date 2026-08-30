@@ -748,7 +748,28 @@ export const listSubjectsAdmin = asyncHandler(async (req, res) => {
     .lean();
 
   const ids = subjects.map((s) => s._id);
-  const [enrolRows, sessionRows] = await Promise.all([
+  const semesters = [...new Set(subjects.map((s) => s.semester))];
+
+  /*
+   * A period can be handed to someone other than the subject's own lecturer
+   * for just that day ("apply to this period" in the timetable's correction
+   * dialog) — e.g. one lecturer covers Tuesday/Wednesday and another covers
+   * Thursday. The list below has room for only one name per subject, so it
+   * must show everyone who actually teaches a live period of it, not just
+   * whoever `Subject.faculty` happens to say — otherwise the person covering
+   * Thursday is invisible here even though the timetable shows them plainly.
+   * Scoped to the live published grid only: a draft or archived version's
+   * overrides say nothing about who teaches the subject today.
+   */
+  const publishedTimetables = await Timetable.find({
+    semester: { $in: semesters },
+    status: 'published',
+  })
+    .select('_id')
+    .lean();
+  const publishedIds = publishedTimetables.map((t) => t._id);
+
+  const [enrolRows, sessionRows, entryFacultyRows] = await Promise.all([
     Enrollment.aggregate([
       { $match: { subject: { $in: ids }, isActive: true } },
       { $group: { _id: '$subject', n: { $sum: 1 } } },
@@ -757,26 +778,59 @@ export const listSubjectsAdmin = asyncHandler(async (req, res) => {
       { $match: { subject: { $in: ids }, status: 'completed' } },
       { $group: { _id: '$subject', n: { $sum: 1 } } },
     ]),
+    publishedIds.length
+      ? TimetableEntry.find({
+          subject: { $in: ids },
+          timetable: { $in: publishedIds },
+          faculty: { $ne: null },
+        })
+          .select('subject faculty')
+          .populate('faculty', 'name')
+          .lean()
+      : [],
   ]);
   const enrolled = Object.fromEntries(enrolRows.map((r) => [String(r._id), r.n]));
   const conducted = Object.fromEntries(sessionRows.map((r) => [String(r._id), r.n]));
 
+  // subjectId -> Map(facultyId -> name), built from actual per-period overrides.
+  const coveringFaculty = new Map();
+  for (const row of entryFacultyRows) {
+    if (!row.faculty) continue;
+    const sid = String(row.subject);
+    if (!coveringFaculty.has(sid)) coveringFaculty.set(sid, new Map());
+    coveringFaculty.get(sid).set(String(row.faculty._id), row.faculty.name);
+  }
+
   res.json({
     success: true,
-    data: subjects.map((s) => ({
-      id: String(s._id),
-      code: s.code,
-      name: s.name,
-      semester: s.semester,
-      credits: s.credits,
-      plannedClasses: s.plannedClasses,
-      minAttendance: s.minAttendance,
-      isActive: s.isActive,
-      section: s.section ? { id: String(s.section._id), name: s.section.name } : null,
-      faculty: s.faculty ? { id: String(s.faculty._id), name: s.faculty.name } : null,
-      enrolledCount: enrolled[String(s._id)] || 0,
-      conducted: conducted[String(s._id)] || 0,
-    })),
+    data: subjects.map((s) => {
+      const sid = String(s._id);
+      // The subject's own lecturer first, then anyone else who covers a
+      // period of it, deduplicated by id — never a hard-coded name, always
+      // whatever the timetable actually says right now.
+      const names = new Map();
+      if (s.faculty) names.set(String(s.faculty._id), s.faculty.name);
+      for (const [fid, name] of coveringFaculty.get(sid) || []) names.set(fid, name);
+
+      return {
+        id: sid,
+        code: s.code,
+        name: s.name,
+        semester: s.semester,
+        credits: s.credits,
+        plannedClasses: s.plannedClasses,
+        minAttendance: s.minAttendance,
+        isActive: s.isActive,
+        section: s.section ? { id: String(s.section._id), name: s.section.name } : null,
+        faculty: s.faculty ? { id: String(s.faculty._id), name: s.faculty.name } : null,
+        // Ready-to-display label — "Mr Ankit Mehta" when only one person
+        // teaches it, "Mr Ankit Mehta/Dr Anuja Agarwal" when more than one
+        // actually does, null when the subject has no lecturer at all.
+        facultyLabel: names.size ? [...names.values()].join('/') : null,
+        enrolledCount: enrolled[sid] || 0,
+        conducted: conducted[sid] || 0,
+      };
+    }),
   });
 });
 
