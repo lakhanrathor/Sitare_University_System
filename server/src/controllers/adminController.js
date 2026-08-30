@@ -188,13 +188,15 @@ const shapeUser = (u) => ({
 });
 
 export const listUsers = asyncHandler(async (req, res) => {
-  const { role, section, semester, q, includeInactive, withAttendance, below } = req.query;
+  const { role, section, semester, q, deactivatedOnly, withAttendance, below } = req.query;
 
   const filter = {};
   if (role) filter.role = role;
   if (section) filter.section = section;
   if (semester) filter.semester = Number(semester);
-  if (includeInactive !== 'true') filter.isActive = true;
+  // Two lists, never mixed: either everyone active, or everyone deactivated —
+  // "show deactivated" means exactly that, not "active plus deactivated".
+  filter.isActive = deactivatedOnly !== 'true';
   if (q) {
     const rx = new RegExp(String(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     filter.$or = [{ name: rx }, { email: rx }, { rollNumber: rx }, { employeeId: rx }];

@@ -37,7 +37,7 @@ export default function People() {
   const [sectionFilter, setSectionFilter] = useState('');
   // The end-of-semester view: only students below the requirement.
   const [shortageOnly, setShortageOnly] = useState(false);
-  const [threshold, setThreshold] = useState(75);
+  const [threshold, setThreshold] = useState(90);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -54,7 +54,7 @@ export default function People() {
       const [list, secs] = await Promise.all([
         api.adminUsers({
           role: tab,
-          includeInactive: showInactive ? 'true' : '',
+          deactivatedOnly: showInactive ? 'true' : '',
           // Filtered on the server: with several hundred students, narrowing
           // here means the attendance aggregate only runs over the year asked
           // for rather than the whole college.
@@ -294,7 +294,7 @@ export default function People() {
                 min={1}
                 max={100}
                 value={threshold}
-                onChange={(e) => setThreshold(Number(e.target.value) || 75)}
+                onChange={(e) => setThreshold(Number(e.target.value) || 90)}
                 disabled={!shortageOnly}
                 className="nums w-11 rounded border border-slate-300 px-1 py-0.5 text-center text-xs disabled:bg-slate-50 disabled:text-slate-400"
               />
