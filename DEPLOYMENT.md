@@ -81,6 +81,17 @@ $env:MONGO_URI="mongodb+srv://...staging-cluster.../sitare_erp_staging"; node sr
 This works because `dotenv` (loading `server/.env`) never overrides a variable
 already set in the shell, so your local `.env` — and local dev — is untouched.
 
+### `seed.js` refuses to run against production
+
+`seed.js` wipes every collection and creates the well-known `admin@sitare.org` /
+`admin123` account — appropriate for dev/staging, never for a real deployment.
+It checks `NODE_ENV` and exits immediately with an error if it is `production`,
+rather than relying on everyone remembering not to run it there. This is why a
+production deployment should always have `NODE_ENV=production` set (it already
+needs to be, for other reasons — see the API service's env vars) — that same
+setting is what makes this guard effective. Bootstrapping a real admin account
+uses `create-admin.mjs` instead (see below), which never deletes anything.
+
 ### A note on the MongoDB Atlas IP allowlist
 
 Render's free tier doesn't offer a fixed outbound IP, so the staging Atlas cluster's
@@ -108,3 +119,18 @@ Handoff mechanics that make this actually true, not just a policy:
   env var afterward; nobody can read it back through the UI, only overwrite it.
 - On handoff, rotate the production DB password and `JWT_SECRET`. Anything the
   developer may have seen during earlier testing stops working immediately.
+
+### Bootstrapping the first production admin
+
+A freshly created production database has zero users, and every account in this
+app is normally created by an existing admin through Admin → People — so nobody
+can log in at all until one admin exists. Whoever holds production runs, once:
+
+```bash
+MONGO_URI="the-production-connection-string" node create-admin.mjs "Real Name" "real-email@sitare.org" "a-real-password-they-choose"
+```
+
+This is the only sanctioned way to get a first admin into production. It never
+deletes anything and refuses if the email already exists, so it's safe even if
+run twice by accident — unlike `seed.js`, which must never touch this database
+and now refuses outright if `NODE_ENV=production` (see above).

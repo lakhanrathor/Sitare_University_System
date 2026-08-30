@@ -26,6 +26,25 @@ import SwapRequest from '../models/SwapRequest.js';
 import Notification from '../models/Notification.js';
 
 async function seed() {
+  /*
+   * A hard stop, not just a warning in the docs — this script wipes every
+   * collection and (re)creates the well-known admin@sitare.org / admin123
+   * account. Written instructions get skipped or mixed up; this cannot be.
+   * NODE_ENV=production is exactly the signal a real deployment sets (see
+   * DEPLOYMENT.md), so anyone who points this at production by mistake, or
+   * runs it from inside a production shell, is refused outright instead of
+   * silently losing real data and gaining a publicly-known password.
+   */
+  if (env.isProd) {
+    console.error(
+      '[seed] Refusing to run: NODE_ENV=production. This script wipes every collection and ' +
+        'creates a well-known default admin password — never appropriate for a real deployment.\n' +
+        '[seed] Use create-admin.mjs instead: it only ever adds one admin, with credentials you ' +
+        'choose, and never deletes anything.'
+    );
+    process.exit(1);
+  }
+
   await mongoose.connect(env.mongoUri);
   console.log(`[seed] Connected to ${mongoose.connection.name}`);
 
