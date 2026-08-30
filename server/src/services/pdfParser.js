@@ -206,6 +206,32 @@ const FACULTY_TITLE_RE = /^\s*(dr|mr|mrs|ms|miss|prof|professor|shri|smt)\b\.?\s
  * until a lecturer line arrives — new or continuing — always attaches them
  * to the right entry, whether the subject wraps zero lines or several.
  */
+/*
+ * A row's subject/faculty split only has a lower bound (x >= split means
+ * "faculty side"), not an upper one — so an unrelated table sitting further
+ * right on the same page (a "Classroom Allocation" block, say) that happens
+ * to share a row's y-coordinate gets read as more of that row's faculty
+ * text. Genuine same-entry text never has a gap this wide: items this close
+ * together are already merged into one by the glyph extraction upstream, so
+ * two *separate* items on one side of a row are either adjacent words of the
+ * same phrase (a small gap) or content from an entirely different table (a
+ * large one). Stopping at the first oversized gap keeps the first, drops
+ * the second, without needing to know anything about that other table.
+ */
+const MAX_LEGEND_WORD_GAP = 40;
+
+function contiguousText(items) {
+  const sorted = [...items].sort((a, b) => a.x - b.x);
+  const kept = [];
+  let previousEnd = null;
+  for (const it of sorted) {
+    if (previousEnd !== null && it.x - previousEnd > MAX_LEGEND_WORD_GAP) break;
+    kept.push(it.text);
+    previousEnd = it.x + (it.width || 0);
+  }
+  return kept.join(' ').trim();
+}
+
 function readLegend(rows, startIndex, headerCells) {
   const split = (headerCells.subject + headerCells.faculty) / 2;
 
@@ -214,8 +240,8 @@ function readLegend(rows, startIndex, headerCells) {
     const row = rows[i];
     const left = row.items.filter((it) => it.x < split);
     const right = row.items.filter((it) => it.x >= split);
-    const leftText = left.map((i2) => i2.text).join(' ').trim();
-    const rightText = right.map((i2) => i2.text).join(' ').trim();
+    const leftText = contiguousText(left);
+    const rightText = contiguousText(right);
     if (!leftText && !rightText) continue;
     lines.push({
       y: row.y,
