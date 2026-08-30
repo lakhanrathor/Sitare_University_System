@@ -203,7 +203,7 @@ export default function People() {
             {tab === 'student' && (
               <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
                 <Upload className="h-4 w-4" />
-                Import PDF
+                Import
               </Button>
             )}
             <Button size="sm" onClick={openCreate}>
@@ -622,7 +622,7 @@ function ImportStudentsModal({ open, onClose, sections, onDone }) {
       open={open}
       onClose={onClose}
       title="Import students"
-      subtitle="Bulk-add a cohort from a PDF"
+      subtitle="Bulk-add a cohort from a PDF or CSV"
       width="max-w-xl"
       footer={
         <>
@@ -692,7 +692,7 @@ function ImportStudentsModal({ open, onClose, sections, onDone }) {
         </div>
 
         <Field
-          label="Student list PDF"
+          label="Student list PDF or CSV"
           hint={
             sectionId
               ? 'Only needs three columns: rollNumber, name, email. Anything else in the file is ignored.'
@@ -703,7 +703,7 @@ function ImportStudentsModal({ open, onClose, sections, onDone }) {
             <input
               ref={fileRef}
               type="file"
-              accept="application/pdf,.pdf"
+              accept="application/pdf,.pdf,text/csv,.csv"
               onChange={(e) => {
                 const picked = e.target.files?.[0] || null;
                 setFile(picked);

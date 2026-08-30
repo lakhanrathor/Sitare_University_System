@@ -27,6 +27,33 @@ export const uploadPdf = (fieldName = 'file') => (req, res, next) =>
     next(err instanceof ApiError ? err : ApiError.badRequest(err.message));
   });
 
+/**
+ * A student roster: either a PDF (some rosters have no real text layer at
+ * all — a scan, or a "print to PDF" of an image — and there is nothing a
+ * text-based parser can do about that) or a CSV export from Excel/Sheets,
+ * which is always plain text and sidesteps that failure mode entirely.
+ */
+const PDF_OR_CSV_RE = /^(application\/pdf|text\/csv)$/i;
+const pdfOrCsv = multer({
+  storage,
+  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const name = file.originalname.toLowerCase();
+    const ok = PDF_OR_CSV_RE.test(file.mimetype) || name.endsWith('.pdf') || name.endsWith('.csv');
+    cb(ok ? null : ApiError.badRequest('Only a PDF or CSV file can be uploaded'), ok);
+  },
+});
+
+/** Accepts an optional `file` field; requests without one pass straight through. */
+export const uploadPdfOrCsv = (fieldName = 'file') => (req, res, next) =>
+  pdfOrCsv.single(fieldName)(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return next(ApiError.badRequest('That file is larger than 15 MB'));
+    }
+    next(err instanceof ApiError ? err : ApiError.badRequest(err.message));
+  });
+
 /*
  * Leave applications do not arrive as tidy PDFs. A student photographs a
  * medical certificate, or screenshots the mail — so images are accepted

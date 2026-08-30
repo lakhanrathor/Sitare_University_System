@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { protect, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import { uploadPdf } from '../middleware/upload.js';
+import { uploadPdfOrCsv } from '../middleware/upload.js';
 import { auditLog } from '../utils/audit.js';
 import { listLeaveDocuments } from '../controllers/leaveController.js';
 import {
@@ -54,8 +54,8 @@ router.get('/overview', getOverview);
 router.get('/users', listUsers);
 router.get('/faculty', listFacultyWithLoad);
 router.post('/users', validate(createUserSchema), createUser);
-/* Accepts a PDF roster or pasted rows; validated inside the controller. */
-router.post('/users/import', uploadPdf(), importStudents);
+/* Accepts a PDF or CSV roster, or pasted rows; validated inside the controller. */
+router.post('/users/import', uploadPdfOrCsv(), importStudents);
 router.patch('/users/:userId', validate(updateUserSchema), updateUser);
 router.patch('/users/:userId/status', setUserStatus);
 router.delete('/users/:userId', deleteUser);

@@ -872,7 +872,13 @@ function isRepeatedHeader(row) {
  */
 export async function parseStudentsPDF(buffer) {
   const items = await extractItems(buffer);
-  if (!items.length) throw new Error('No text could be read from that PDF.');
+  if (!items.length) {
+    throw new Error(
+      'No text could be read from that PDF — if it is a scan or a photo the text is not ' +
+        'selectable, so a PDF parser cannot see it. Export the roster as a CSV instead (from ' +
+        'Excel or Google Sheets: File → Download → CSV), or use "Paste rows instead" below.'
+    );
+  }
 
   const rows = groupIntoRows(items);
 

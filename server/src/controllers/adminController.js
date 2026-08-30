@@ -433,21 +433,28 @@ export const importStudents = asyncHandler(async (req, res) => {
 
   if (!Number.isInteger(semester)) throw ApiError.badRequest('Choose a semester');
 
-  // A PDF roster or pasted text — both end up as the same rows.
+  // A PDF roster, an uploaded CSV, or pasted text — all end up as the same rows.
   let records;
   let source;
   if (req.file) {
-    try {
-      records = await parseStudentsPDF(req.file.buffer);
-      source = 'pdf';
-    } catch (err) {
-      throw ApiError.badRequest(err.message);
+    const isCsv =
+      /csv/i.test(req.file.mimetype) || req.file.originalname.toLowerCase().endsWith('.csv');
+    if (isCsv) {
+      ({ records } = parseCSVToObjects(req.file.buffer.toString('utf-8')));
+      source = 'csv';
+    } else {
+      try {
+        records = await parseStudentsPDF(req.file.buffer);
+        source = 'pdf';
+      } catch (err) {
+        throw ApiError.badRequest(err.message);
+      }
     }
   } else if (req.body?.csv?.trim()) {
     ({ records } = parseCSVToObjects(req.body.csv));
     source = 'csv';
   } else {
-    throw ApiError.badRequest('Attach a student list PDF, or paste the rows');
+    throw ApiError.badRequest('Attach a student list PDF or CSV, or paste the rows');
   }
 
   if (!records.length) throw ApiError.badRequest('No student rows could be read');
