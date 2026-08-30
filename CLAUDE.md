@@ -42,11 +42,12 @@ server/src
 ├── middleware/     auth (JWT + role guard) · validate (zod) · error (maps Mongoose/Zod errors) · upload (multer)
 ├── utils/          audit.js (security/audit log lines) · ApiError · asyncHandler · csv · date · pdf
 ├── sockets/        JWT-authenticated Socket.io gateway
-└── seed/           deterministic demo data (safe to re-run; resets the DB)
+└── seed/           wipes the DB, creates a single admin account — safe to re-run in dev/staging
 
 server/  (repo root of the API, one level up from src/)
 ├── security-check.mjs      <- HTTP-level security regression checks against a running server
-└── google-auth-check.mjs   <- unit checks for resolveGoogleUser against fabricated payloads
+├── google-auth-check.mjs   <- unit checks for resolveGoogleUser against fabricated payloads
+└── create-admin.mjs        <- adds one admin to a database that must NOT be wiped (real prod)
 
 client/src
 ├── context/        Auth · Socket · Toast · Notification
@@ -67,7 +68,7 @@ Requires Node 18+ and a local MongoDB on `mongodb://127.0.0.1:27017`.
 
 ```bash
 npm run setup   # installs root + server + client deps
-npm run seed    # demo data — safe to re-run, resets the DB
+npm run seed    # resets the DB and creates one admin account — safe to re-run
 npm run dev     # API on :5000 (auto-restarts on save) + web on :5173, together
 ```
 
@@ -78,9 +79,14 @@ Open <http://localhost:5173>. Vite proxies `/api` and `/socket.io` to the API.
   without `--watch` for a stable session (e.g. a live demo); the client's fetch wrapper also
   retries automatically on that specific failure signature either way.
 - `npm run stop` frees ports 5000/5173 if a previous run didn't shut down cleanly.
-- Demo accounts (from `npm run seed`): `admin@sitare.org` / `admin123`, faculty and student
-  logins listed in [README.md](README.md). The login page pre-fills the admin credentials
-  automatically in dev builds only (`import.meta.env.DEV`) — never in a production build.
+- `npm run seed` (`server/src/seed/seed.js`) wipes every collection and creates exactly one
+  account: `admin@sitare.org` / `admin123`. Everything else — sections, faculty, students,
+  subjects, the timetable — starts empty on purpose, so the real workflow (log in as admin,
+  then build the rest through Admin → People / Academics / Manage Timetable) can be tested
+  from a genuinely clean slate. It is a dev/staging tool only: it deletes everything first, so
+  it must never be run against a database holding real people — see `create-admin.mjs` below
+  for that case. The login page pre-fills the admin credentials automatically in dev builds
+  only (`import.meta.env.DEV`) — never in a production build.
 - `GOOGLE_CLIENT_ID` (server `.env`) and `VITE_GOOGLE_CLIENT_ID` (client `.env`, same value) enable
   Google sign-in — see `.env.example` in each package. Both are optional: unset, the "Continue
   with Google" button simply doesn't render and `/api/auth/google` refuses with a clear "not

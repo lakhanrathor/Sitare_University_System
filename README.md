@@ -43,7 +43,7 @@ Requires Node 18+ and a local MongoDB on `mongodb://127.0.0.1:27017`.
 # Terminal 1 — API on :5000
 cd server
 npm install
-npm run seed      # demo data; safe to re-run, it resets the DB
+npm run seed      # resets the DB and creates one admin account; safe to re-run
 npm start
 
 # Terminal 2 — UI on :5173
@@ -54,33 +54,21 @@ npm run dev
 
 Open <http://localhost:5173>. Vite proxies `/api` and `/socket.io` to the API.
 
-### Demo accounts
+### Getting past the first login
 
-| Role | Email | Password | Teaches |
-| --- | --- | --- | --- |
-| Admin | `admin@sitare.org` | `admin123` | — |
-| Faculty | `ankit.mehta@sitare.org` | `faculty123` | WAD · Section A |
-| Faculty | `anuja.agarwal@sitare.org` | `faculty123` | WAD · Section B |
-| Faculty | `deepak.rao@sitare.org` | `faculty123` | OSP · both sections |
-| Faculty | `chhavi.sharma@sitare.org` | `faculty123` | DL · Section A |
-| Faculty | `muskan.katiyar@sitare.org` | `faculty123` | DL · Section B |
-| Faculty | `prateek.goel@sitare.org` | `faculty123` | CPS · both sections |
-| Student | `su24001@sitare.org` | `student123` | Section A |
-| Student | `su24009@sitare.org` | `student123` | Section B |
+`npm run seed` creates exactly one account — `admin@sitare.org` / `admin123` — and nothing
+else. Sections, faculty, students, subjects and the timetable all start empty on purpose, so
+the real workflow can be exercised from a clean slate:
 
-`su24001` … `su24016` all work (1-8 Section A, 9-16 Section B).
-Seeded numbers for Aarav Sharma (SU24001):
+1. Log in as `admin@sitare.org`.
+2. **Admin → Academics** — create a section and a subject or two.
+3. **Admin → People** — add faculty and students by hand, or bulk-import a roster (PDF or CSV).
+4. **Admin → Manage Timetable** — upload/paste a weekly grid and publish it.
 
-```
-WAD     2 of 2 attended    100%      <- 30 planned, ignored
-OSP     4 of 5 attended     80%
-DL      2 of 4 attended     50%
-CPS     2 of 3 attended     66.67%
-OVERALL 10 of 14            71.43%
-```
-
-Section B students see OSP with 2 conducted and the other three subjects
-with **no classes yet** — rendered as `—`, never 0%.
+From there, attendance, swaps, notes and exams all have real data to work against. There is a
+separate script, `server/create-admin.mjs`, for adding an admin to a database that must not be
+wiped — the real difference between a dev/staging reset and a production bootstrap; see
+`DEPLOYMENT.md`.
 
 ### Seeing realtime work
 
@@ -216,7 +204,7 @@ server/src
 ├── controllers/     auth · subject · attendance · timetable · schedule · swap · notification
 ├── middleware/      auth (JWT + role guard) · validate (zod) · error
 ├── sockets/         JWT-authenticated Socket.io gateway
-└── seed/            the real Semester-3 timetable + attendance history
+└── seed/            wipes the DB, creates a single admin account — dev/staging only
 
 client/src
 ├── context/         Auth · Socket · Toast · Notification
