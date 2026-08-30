@@ -10,7 +10,8 @@
     "start": "node src/server.js",
     "seed": "node src/seed/seed.js",
     "security-check": "node security-check.mjs",
-    "google-auth-check": "node google-auth-check.mjs"
+    "google-auth-check": "node google-auth-check.mjs",
+    "create-admin": "node create-admin.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
