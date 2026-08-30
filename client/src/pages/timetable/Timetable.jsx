@@ -291,8 +291,14 @@ export default function Timetable() {
 
       {/* The grid */}
       <Card className="overflow-hidden">
+        {/*
+          Each column gets a real minimum width so a subject's name and its
+          lecturer's name both have room to read, rather than being squeezed
+          to fit whatever the viewport allows — overflow is what the
+          horizontal scroll is for, not narrower columns.
+        */}
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse" style={{ minWidth: columns.length * 118 + 88 }}>
+          <table className="w-full border-collapse" style={{ minWidth: columns.length * 152 + 88 }}>
             <thead>
               <tr>
                 <th className="sticky left-0 z-10 w-22 border-r border-b border-slate-200 bg-slate-50 p-2 text-left text-[11px] font-semibold text-slate-500">

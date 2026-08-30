@@ -116,13 +116,18 @@ export default function SlotCell({
               </p>
             )}
 
+            {/* line-clamp, not truncate — a combined class names two lecturers
+                ("Mr Ankit Mehta/ Dr Anuja Agarwal"), and clipping to one line
+                loses whichever name comes second. */}
             {o.faculty && (
-              <p className="mt-1 truncate text-[10px] text-slate-500">{o.faculty.name}</p>
+              <p className="mt-1 line-clamp-2 text-[10px] leading-tight text-slate-500">
+                {o.faculty.name}
+              </p>
             )}
 
             {/* A stand-in was asked to mark this register. */}
             {o.attendanceBy && o.attendanceBy.id !== o.faculty?.id && (
-              <p className="mt-0.5 truncate text-[10px] text-amber-700">
+              <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-amber-700">
                 Register: {o.attendanceBy.name}
               </p>
             )}

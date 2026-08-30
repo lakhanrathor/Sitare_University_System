@@ -189,11 +189,22 @@ const FACULTY_TITLE_RE = /^\s*(dr|mr|mrs|ms|miss|prof|professor|shri|smt)\b\.?\s
  *
  * Entries are found through the faculty column, because a table row holds
  * exactly one lecturer however many lines the subject beside it wraps onto.
- * Vertical spacing cannot be trusted for this: in a tightly set legend the gap
- * *between* two entries is routinely smaller than the gap between two wrapped
- * lines of the same entry, which silently welds neighbouring rows together —
- * and a subject welded to its neighbour matches nothing in the grid, so the
- * lecturer ends up with no classes at all.
+ * A line opening with a title ("Dr", "Mr.") starts a new lecturer; anything
+ * else continues the one above.
+ *
+ * Assignment of subject-column lines is done by *print order*, not by
+ * vertical distance. A distance comparison looks right until a subject wraps
+ * onto more lines than its own lecturer's name does — which is the ordinary
+ * case, not an edge case, since a two-line subject sits beside a one-line
+ * name far more often than not. When that happens the subject's earlier
+ * wrapped lines sit physically nearer the *previous* lecturer's line than
+ * their own, and a distance-based match glues them onto the wrong entry —
+ * "Advanced Data" ends up on the entry above it, "Probability for Computer
+ * Science" only two words of its own name. Print order has no such failure
+ * mode: every subject line appears, in the file, before the row where its
+ * own lecturer's name is finally printed, so buffering left-column lines
+ * until a lecturer line arrives — new or continuing — always attaches them
+ * to the right entry, whether the subject wraps zero lines or several.
  */
 function readLegend(rows, startIndex, headerCells) {
   const split = (headerCells.subject + headerCells.faculty) / 2;
@@ -218,71 +229,64 @@ function readLegend(rows, startIndex, headerCells) {
   const heights = lines.map((l) => l.height).filter(Boolean).sort((a, b) => a - b);
   const lineHeight = heights.length ? heights[Math.floor(heights.length / 2)] : 9;
 
-  /*
-   * One block per table row. A line opening with a title starts a new
-   * lecturer; anything else continues the one above ("Shukla/Ms Riya" is the
-   * middle of a name, not the start of one). Spacing is only the fallback for
-   * legends that print no titles.
-   */
-  const blocks = [];
+  // No lecturer column to anchor on: fall back to one entry per printed line.
+  if (!lines.some((l) => l.rightText)) {
+    return lines
+      .filter((l) => l.leftText)
+      .map((l) => ({ subject: l.leftText.replace(/\s+/g, ' ').trim(), faculty: '' }));
+  }
+
+  const entries = [];
+  let current = null;
+  let pendingSubject = []; // left-column lines seen since the last lecturer line
   let previousY = null;
-  let previousText = '';
+  let previousFaculty = '';
+
   for (const l of lines) {
-    if (!l.rightText) continue;
+    if (!l.rightText) {
+      if (l.leftText) pendingSubject.push(l.leftText);
+      continue;
+    }
+
     /*
      * A subject taught by two people wraps mid-list — "Mr Ankit Mehta/" then
      * "Dr Anuja Agarwal" — so a dangling separator outranks the title rule.
      * Without this the second lecturer starts a phantom entry and takes half
      * the subject's name with them.
      */
-    const continuesList = /[/,&+-]\s*$/.test(previousText);
+    const continuesList = /[/,&+-]\s*$/.test(previousFaculty);
     const startsEntry =
       previousY === null ||
       (!continuesList &&
         (FACULTY_TITLE_RE.test(l.rightText) || l.y - previousY > lineHeight * 1.6));
+
+    // Whatever was buffered, plus this row's own left text, was printed
+    // before this lecturer line and belongs to whichever entry it opens.
+    const subjectHere = [...pendingSubject, ...(l.leftText ? [l.leftText] : [])];
+    pendingSubject = [];
+
     if (startsEntry) {
-      blocks.push({ top: l.y, bottom: l.y, faculty: l.rightText });
+      if (current) entries.push(current);
+      current = { subject: subjectHere, faculty: [l.rightText] };
     } else {
-      const b = blocks[blocks.length - 1];
-      b.bottom = l.y;
-      b.faculty = `${b.faculty} ${l.rightText}`;
+      current.subject.push(...subjectHere);
+      current.faculty.push(l.rightText);
     }
     previousY = l.y;
-    previousText = l.rightText;
+    previousFaculty = l.rightText;
   }
-
-  // No lecturer column to anchor on: fall back to one entry per printed line.
-  if (!blocks.length) {
-    return lines
-      .filter((l) => l.leftText)
-      .map((l) => ({ subject: l.leftText.replace(/\s+/g, ' ').trim(), faculty: '' }));
-  }
-
-  const entries = blocks.map((b) => ({
-    centre: (b.top + b.bottom) / 2,
-    subject: '',
-    faculty: b.faculty.replace(/\s+/g, ' ').trim(),
-  }));
-
-  /*
-   * Both cells of a row are centred on that row, so each subject line belongs
-   * to whichever lecturer it sits closest to — regardless of how far the
-   * subject wraps above or below its own lecturer's line.
-   */
-  for (const l of lines) {
-    if (!l.leftText) continue;
-    let nearest = 0;
-    for (let i = 1; i < entries.length; i += 1) {
-      if (Math.abs(l.y - entries[i].centre) < Math.abs(l.y - entries[nearest].centre)) nearest = i;
-    }
-    entries[nearest].subject = `${entries[nearest].subject} ${l.leftText}`.trim();
+  if (current) {
+    // Trailing left-only lines with no lecturer line left to close them —
+    // rare, but still this entry's rather than nobody's.
+    current.subject.push(...pendingSubject);
+    entries.push(current);
   }
 
   return entries
     .map((e) => ({
-      subject: e.subject.replace(/\s+/g, ' ').trim(),
+      subject: e.subject.join(' ').replace(/\s+/g, ' ').trim(),
       // "Ms Preeti Shukla/Ms Riya Bangera" — the first name owns the subject.
-      faculty: e.faculty,
+      faculty: e.faculty.join(' ').replace(/\s+/g, ' ').trim(),
     }))
     .filter((e) => e.subject);
 }
