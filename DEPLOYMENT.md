@@ -54,6 +54,32 @@ and Socket.io), `GOOGLE_CLIENT_ID`.
 **Client service**: `VITE_API_URL` (the API service's URL — see below),
 `VITE_GOOGLE_CLIENT_ID`.
 
+### The client static site needs one rewrite rule
+
+React Router only ever handles a route like `/admin/people` once `index.html` and
+the JS bundle have already loaded in the browser — a link clicked *inside* the app
+never leaves the page. A refresh, a bookmark, or pasting that URL directly is a
+real HTTP request straight to the static host for a literal file at that path,
+which doesn't exist, so it 404s before React gets a chance to run.
+
+The fix is a rewrite rule — serve `index.html` (with a `200`, not a redirect) for
+any path that isn't a real file — but **this is not a `_redirects` file the way
+Netlify does it**; Render's static sites don't read one. It's configured through
+Render's own Rewrites/Redirects, either in the dashboard (the service → Redirects/
+Rewrites tab: Source `/*`, Destination `/index.html`, Action **Rewrite**) or via
+its API:
+
+```bash
+curl -X POST "https://api.render.com/v1/services/<static-site-id>/routes" \
+  -H "Authorization: Bearer <api-key>" -H "Content-Type: application/json" \
+  -d '{"type":"rewrite","source":"/*","destination":"/index.html"}'
+```
+
+This is **not** version-controlled — it lives on Render's side, same as an
+environment variable — so anyone standing up a *new* static site for this client
+(including production) needs to add it there too, or every deep link will 404 on
+refresh exactly the way staging's did before this was added.
+
 ### Why `VITE_API_URL` exists
 
 Locally, Vite's dev proxy makes `/api` and `/socket.io` same-origin, so the client
