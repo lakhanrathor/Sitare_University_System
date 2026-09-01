@@ -26,7 +26,13 @@ export const DAYS = [
   { day: 3, name: 'Wednesday', short: 'Wed', teaching: true },
   { day: 4, name: 'Thursday', short: 'Thu', teaching: true },
   { day: 5, name: 'Friday', short: 'Fri', teaching: true },
-  { day: 6, name: 'Saturday', short: 'Sat', teaching: false },
+  /*
+   * Not part of the recurring weekly grid — no PDF timetable schedules a
+   * regular class here — but still a real day for an extra class or a class
+   * shifted off a weekday, so it needs to be bookable and visible like any
+   * other teaching day rather than hidden from the week view entirely.
+   */
+  { day: 6, name: 'Saturday', short: 'Sat', teaching: true },
   { day: 7, name: 'Sunday', short: 'Sun', teaching: false },
 ];
 

@@ -482,6 +482,28 @@ export const markAttendance = asyncHandler(async (req, res) => {
 
   const slotsToWrite = [Number(slot), ...extra].sort((a, b) => a - b);
 
+  /*
+   * A register already taken can only be corrected on the day it was taken —
+   * once the day has moved on, this is history, not a mistake to fix. A class
+   * being marked for the very first time is unaffected, however old the date
+   * is, since that isn't an edit. Checked here, not just hidden in the UI, so
+   * a stale page or a direct call cannot slip a late correction through.
+   */
+  if (date !== todayKey()) {
+    const alreadyTaken = await ClassSession.find({
+      subject: subject._id,
+      dateKey: date,
+      slot: { $in: slotsToWrite },
+    })
+      .select('_id')
+      .lean();
+    if (alreadyTaken.length) {
+      throw ApiError.badRequest(
+        'Attendance for this class was already recorded and can only be edited on the same day — it can no longer be changed.'
+      );
+    }
+  }
+
   const enrollments = await Enrollment.find({ subject: subject._id, isActive: true })
     .select('student')
     .lean();

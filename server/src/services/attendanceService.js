@@ -57,7 +57,6 @@ async function getStudentSubjectTallies(studentId, subjectIds) {
       $group: {
         _id: '$subject',
         present: { $sum: { $cond: [{ $in: ['$status', PRESENT_STATUSES] }, 1, 0] } },
-        late: { $sum: { $cond: [{ $eq: ['$status', 'late'] }, 1, 0] } },
         markedAbsent: { $sum: { $cond: [{ $eq: ['$status', 'absent'] }, 1, 0] } },
       },
     },
@@ -135,7 +134,7 @@ export async function getStudentSummary(studentId) {
   const bySubject = subjects.map((s) => {
     const key = String(s._id);
     const conducted = conductedMap[key] || 0;
-    const tally = tallyMap[key] || { present: 0, late: 0, markedAbsent: 0 };
+    const tally = tallyMap[key] || { present: 0, markedAbsent: 0 };
     const present = tally.present;
     // Any conducted class without a present record counts against the student,
     // so present + absent always reconciles with conducted.
@@ -153,7 +152,6 @@ export async function getStudentSummary(studentId) {
       conducted,
       present,
       absent,
-      late: tally.late,
       percentage,
       status: attendanceStatusLabel(percentage, s.minAttendance),
     };
@@ -225,12 +223,20 @@ export async function getStudentSubjectHistory(studentId, subjectId) {
  */
 export async function getSubjectRoster(subjectId) {
   const enrollments = await Enrollment.find({ subject: subjectId, isActive: true })
-    .populate({ path: 'student', select: 'name email rollNumber batch' })
+    .populate({ path: 'student', select: 'name email rollNumber batch isActive' })
     .lean();
 
+  /*
+   * The enrollment record itself has nothing to do with whether the student's
+   * account is still active — deactivating a student in Admin -> People
+   * never touches Enrollment. Their attendance history stays in the database
+   * either way (Deactivate, don't delete), but the current roster — what a
+   * teacher marks against, and what a report lists — should only ever be who
+   * is actually still enrolled and active.
+   */
   const students = enrollments
     .map((e) => e.student)
-    .filter(Boolean)
+    .filter((s) => s && s.isActive !== false)
     .sort((a, b) => (a.rollNumber || '').localeCompare(b.rollNumber || ''));
 
   const conducted = (await getConductedCounts([subjectId]))[String(subjectId)] || 0;

@@ -157,7 +157,16 @@ export default function AdminHome() {
             <TodoRow
               count={todo.subjectsNoFaculty}
               label={todo.subjectsNoFaculty === 1 ? 'subject has no lecturer' : 'subjects have no lecturer'}
-              detail="Attendance cannot be recorded without one"
+              detail={
+                academics.subjectsNoFaculty.length
+                  ? `${academics.subjectsNoFaculty
+                      .map(
+                        (s) =>
+                          `${s.code} · Semester ${s.semester}${s.section ? ` · Section ${s.section}` : ''}`
+                      )
+                      .join(', ')} — attendance cannot be recorded without one`
+                  : 'Attendance cannot be recorded without one'
+              }
               to="/admin/academics"
               action="Assign"
             />

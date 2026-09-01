@@ -290,14 +290,16 @@ export default function Timetable() {
       </div>
 
       {/* The grid */}
-      <Card className="overflow-hidden">
+      <Card className="min-w-0 overflow-hidden">
         {/*
           Each column gets a real minimum width so a subject's name and its
           lecturer's name both have room to read, rather than being squeezed
           to fit whatever the viewport allows — overflow is what the
-          horizontal scroll is for, not narrower columns.
+          horizontal scroll is for, not narrower columns. `max-w-full` keeps
+          this div itself pinned to the page's width no matter how wide the
+          table inside it gets, so it — not the whole page — is what scrolls.
         */}
-        <div className="overflow-x-auto">
+        <div className="max-w-full overflow-x-auto">
           <table className="w-full border-collapse" style={{ minWidth: columns.length * 152 + 88 }}>
             <thead>
               <tr>
@@ -392,7 +394,7 @@ export default function Timetable() {
 
       {week.timetable && (
         <p className="mt-3 text-center text-xs text-slate-400">
-          Weekends are not teaching days. Changes here apply to a single date — the recurring
+          Sunday is not a teaching day. Changes here apply to a single date — the recurring
           timetable stays as published.
         </p>
       )}

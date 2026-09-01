@@ -1,8 +1,7 @@
 import mongoose from 'mongoose';
 
-export const ATTENDANCE_STATUS = ['present', 'absent', 'late'];
-/** 'late' still counts as attended for the percentage. */
-export const PRESENT_STATUSES = ['present', 'late'];
+export const ATTENDANCE_STATUS = ['present', 'absent'];
+export const PRESENT_STATUSES = ['present'];
 
 const attendanceSchema = new mongoose.Schema(
   {

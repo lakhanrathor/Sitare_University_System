@@ -238,7 +238,13 @@ export default function Layout() {
         )}
       </header>
 
-      <main className={`mx-auto w-full ${container} flex-1 px-4 py-7 sm:px-6 sm:py-9`}>
+      {/*
+        min-w-0 overrides a flex item's default min-width: auto — without it, a
+        wide child (the timetable grid) forces this flex item to grow past its
+        own max-width instead of respecting it, and the whole page scrolls
+        sideways rather than just the grid's own overflow-x-auto container.
+      */}
+      <main className={`mx-auto w-full min-w-0 ${container} flex-1 px-4 py-7 sm:px-6 sm:py-9`}>
         <Outlet />
       </main>
 

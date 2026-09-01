@@ -119,7 +119,7 @@ export const getOverview = asyncHandler(async (_req, res) => {
     sessionsThisWeek,
     changesThisWeek,
     unassignedStudents,
-    subjectsNoFaculty,
+    subjectsNoFacultyList,
   ] = await Promise.all([
     User.countDocuments({ role: 'student', isActive: true }),
     User.countDocuments({ role: 'faculty', isActive: true }),
@@ -132,8 +132,14 @@ export const getOverview = asyncHandler(async (_req, res) => {
     ClassSession.countDocuments({ status: 'completed', dateKey: { $gte: weekAgo, $lte: today } }),
     ScheduleChange.countDocuments({ createdAt: { $gte: new Date(`${weekAgo}T00:00:00Z`) } }),
     User.countDocuments({ role: 'student', isActive: true, section: null }),
-    Subject.countDocuments({ isActive: true, faculty: null }),
+    // The count alone sends an admin hunting through every semester for it —
+    // naming it here is what the "Needs your attention" card shows instead.
+    Subject.find({ isActive: true, faculty: null })
+      .select('code name semester')
+      .populate('section', 'name')
+      .lean(),
   ]);
+  const subjectsNoFaculty = subjectsNoFacultyList.length;
 
   // Semesters that have cohorts but no live timetable — the gap an admin cares about.
   const allSections = await Section.find({ isActive: true }).lean();
@@ -145,7 +151,18 @@ export const getOverview = asyncHandler(async (_req, res) => {
     success: true,
     data: {
       people: { students, faculty, admins },
-      academics: { sections, subjects, semesters: semestersWithSections },
+      academics: {
+        sections,
+        subjects,
+        semesters: semestersWithSections,
+        subjectsNoFaculty: subjectsNoFacultyList.map((s) => ({
+          id: String(s._id),
+          code: s.code,
+          name: s.name,
+          semester: s.semester,
+          section: s.section?.name || null,
+        })),
+      },
       timetables: {
         published: published.map((t) => ({
           id: String(t._id),

@@ -14,6 +14,19 @@ body,
   height: 100%;
 }
 
+/*
+ * Nothing on this site is meant to scroll sideways at the page level — wide
+ * content (the timetable grid) always carries its own overflow-x-auto
+ * container. Without this, the document root can still pick up extra
+ * scrollable width from a descendant even when every component-level
+ * container is correctly sized, and the whole page — header included — ends
+ * up scrolling along with whatever triggered it.
+ */
+html,
+body {
+  overflow-x: hidden;
+}
+
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
   font-feature-settings: 'cv11', 'ss01';

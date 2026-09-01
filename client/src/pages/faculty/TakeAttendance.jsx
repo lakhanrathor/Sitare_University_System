@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, Save, CheckCheck, Search, PencilLine, Info, CalendarDays, CalendarClock,
+  ArrowLeft, Save, CheckCheck, Search, PencilLine, Lock, CalendarDays, CalendarClock,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
@@ -19,7 +19,6 @@ import {
 
 const OPTIONS = [
   { value: 'present', label: 'P', title: 'Present', on: 'bg-emerald-600 text-white' },
-  { value: 'late', label: 'L', title: 'Late (counts as present)', on: 'bg-amber-500 text-white' },
   { value: 'absent', label: 'A', title: 'Absent', on: 'bg-rose-600 text-white' },
 ];
 
@@ -77,6 +76,8 @@ export default function TakeAttendance() {
   const [sheetLoading, setSheetLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // A class already recorded opens read-only; this is what the pencil unlocks.
+  const [editMode, setEditMode] = useState(false);
 
   /**
    * The class list comes from the timetable, so cancelled classes never appear
@@ -137,7 +138,6 @@ export default function TakeAttendance() {
     const v = Object.values(marks);
     return {
       present: v.filter((x) => x === 'present').length,
-      late: v.filter((x) => x === 'late').length,
       absent: v.filter((x) => x === 'absent').length,
     };
   }, [marks]);
@@ -166,6 +166,17 @@ export default function TakeAttendance() {
   );
 
   /*
+   * A register can only be corrected on the day it was taken — once the day
+   * has moved on it's history, not a mistake to fix. A class being marked for
+   * the first time is unaffected, however old the date is: that isn't an
+   * edit. The server enforces this same rule; this is only what lets the UI
+   * show it before the request round-trips.
+   */
+  const alreadyTaken = Boolean(current?.taken);
+  const sameDayAsToday = Boolean(selected && schedule?.today && selected.date === schedule.today);
+  const canEdit = Boolean(current?.takeable) && (!alreadyTaken || (sameDayAsToday && editMode));
+
+  /*
    * The subject's other periods on the same day. A lab timetabled across two
    * or three of them is one sitting, so the register is the same for all of
    * it — and ticking the same names again for each is busywork.
@@ -183,6 +194,7 @@ export default function TakeAttendance() {
   // A different class means a different set of neighbours; never carry them over.
   useEffect(() => {
     setAlsoSlots([]);
+    setEditMode(false);
   }, [selected?.date, selected?.slot]);
 
   const toggleAlso = (slot) =>
@@ -212,6 +224,7 @@ export default function TakeAttendance() {
         }.`,
         { variant: 'success', title: `Saved for ${formatDate(selected.date)}` }
       );
+      setEditMode(false);
       await Promise.all([loadSchedule(), loadSheet()]);
     } catch (err) {
       notify(err.message, { variant: 'error', title: 'Could not save' });
@@ -342,7 +355,7 @@ export default function TakeAttendance() {
           same subject can legitimately run twice in a day with different
           students in the room, so the teacher says which classes this covers.
         */}
-        {sameDay.length > 0 && !noneTakeable && (
+        {sameDay.length > 0 && !noneTakeable && canEdit && (
           <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50/60 p-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-medium text-indigo-900">
@@ -400,14 +413,29 @@ export default function TakeAttendance() {
           ) : (
             <InfoNote>
               {current?.taken ? (
-                <>
-                  Attendance for this class was already recorded — saving will update it. This
-                  subject has{' '}
-                  <span className="nums font-medium text-slate-700">
-                    {schedule.conducted} conducted
-                  </span>{' '}
-                  {schedule.conducted === 1 ? 'class' : 'classes'}.
-                </>
+                sameDayAsToday ? (
+                  <>
+                    Attendance for this class was already recorded today.{' '}
+                    {editMode
+                      ? 'Submitting now will update the existing record.'
+                      : 'Use the pencil below to make changes — this is only possible until the day ends.'}{' '}
+                    This subject has{' '}
+                    <span className="nums font-medium text-slate-700">
+                      {schedule.conducted} conducted
+                    </span>{' '}
+                    {schedule.conducted === 1 ? 'class' : 'classes'}.
+                  </>
+                ) : (
+                  <>
+                    Attendance for this class was recorded on {formatDate(current.date)} and can no
+                    longer be changed — a class can only be edited on the day it was taken. This
+                    subject has{' '}
+                    <span className="nums font-medium text-slate-700">
+                      {schedule.conducted} conducted
+                    </span>{' '}
+                    {schedule.conducted === 1 ? 'class' : 'classes'}.
+                  </>
+                )
               ) : (
                 <>
                   Saving records class{' '}
@@ -441,16 +469,11 @@ export default function TakeAttendance() {
             <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
-                  <span className="nums">{counts.present + counts.late}</span> present
+                  <span className="nums">{counts.present}</span> present
                 </span>
                 <span className="rounded-full bg-rose-50 px-2.5 py-1 font-medium text-rose-700">
                   <span className="nums">{counts.absent}</span> absent
                 </span>
-                {counts.late > 0 && (
-                  <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">
-                    <span className="nums">{counts.late}</span> late
-                  </span>
-                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -467,7 +490,7 @@ export default function TakeAttendance() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={!current?.takeable}
+                  disabled={!canEdit}
                   onClick={() => setAll('present')}
                 >
                   <CheckCheck className="h-4 w-4" />
@@ -476,7 +499,7 @@ export default function TakeAttendance() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={!current?.takeable}
+                  disabled={!canEdit}
                   onClick={() => setAll('absent')}
                 >
                   All absent
@@ -523,7 +546,7 @@ export default function TakeAttendance() {
                       </div>
                       <StatusToggle
                         value={marks[s.studentId]}
-                        disabled={!current?.takeable}
+                        disabled={!canEdit}
                         onChange={(v) => setMarks((m) => ({ ...m, [s.studentId]: v }))}
                       />
                     </li>
@@ -537,24 +560,37 @@ export default function TakeAttendance() {
             <div className="sticky bottom-4 mt-4">
               <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg shadow-slate-900/5 backdrop-blur">
                 <p className="min-w-0 truncate text-sm text-slate-600">
-                  {current?.taken && (
+                  {alreadyTaken && editMode && (
                     <span className="mr-2 inline-flex items-center gap-1 text-xs font-medium text-amber-700">
                       <PencilLine className="h-3.5 w-3.5" />
                       Editing
                     </span>
                   )}
+                  {alreadyTaken && !sameDayAsToday && (
+                    <span className="mr-2 inline-flex items-center gap-1 text-xs font-medium text-slate-400">
+                      <Lock className="h-3.5 w-3.5" />
+                      Locked
+                    </span>
+                  )}
                   <span className="nums font-medium text-slate-900">{sheet.students.length}</span>{' '}
                   students · {selected && formatDate(selected.date)} · {current?.slotLabel}
                 </p>
-                <Button onClick={save} loading={saving} disabled={!current?.takeable}>
-                  <Save className="h-4 w-4" />
-                  {/* Say the count when one register covers a block. */}
-                  {alsoSlots.length > 0
-                    ? `Save for ${alsoSlots.length + 1} classes`
-                    : current?.taken
-                      ? 'Update attendance'
-                      : 'Save attendance'}
-                </Button>
+                {alreadyTaken && sameDayAsToday && !editMode ? (
+                  <Button variant="secondary" onClick={() => setEditMode(true)}>
+                    <PencilLine className="h-4 w-4" />
+                    Edit attendance
+                  </Button>
+                ) : (
+                  canEdit && (
+                    <Button onClick={save} loading={saving}>
+                      <Save className="h-4 w-4" />
+                      {/* Say the count when one register covers a block. */}
+                      {alsoSlots.length > 0
+                        ? `Submit for ${alsoSlots.length + 1} classes`
+                        : 'Submit attendance'}
+                    </Button>
+                  )
+                )}
               </div>
             </div>
           )}

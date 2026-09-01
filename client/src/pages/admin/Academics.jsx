@@ -336,8 +336,25 @@ export default function Academics() {
                       {/* facultyLabel folds in anyone covering a period of this
                           subject on the live timetable, not just its own
                           lecturer — e.g. "Mr Ankit Mehta/Dr Anuja Agarwal"
-                          when Thursday was handed to someone else. */}
-                      {s.facultyLabel ?? (
+                          when Thursday was handed to someone else. That can
+                          show a name here even when the subject's own default
+                          lecturer (s.faculty, what Edit actually reads and
+                          saves) is unset — flagged rather than shown as plain
+                          text, so that gap isn't hidden behind names covering
+                          for it. */}
+                      {s.facultyLabel ? (
+                        s.faculty ? (
+                          s.facultyLabel
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 text-amber-700"
+                            title="No default lecturer set on the subject itself — these names only come from per-period overrides on the timetable"
+                          >
+                            <AlertTriangle className="h-3 w-3 shrink-0" />
+                            {s.facultyLabel}
+                          </span>
+                        )
+                      ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                           <AlertTriangle className="h-3 w-3" />
                           Unassigned
