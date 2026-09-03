@@ -87,6 +87,12 @@ export default function EditPeriodModal({ open, onClose, occurrence, subjects, f
 
   if (!occurrence) return null;
 
+  // TimetableEntry edits are recurring, so this names the weekday the change
+  // repeats on every week — not just the one date this cell happens to fall on.
+  const weekday = occurrence.date
+    ? new Date(`${occurrence.date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long' })
+    : 'this day';
+
   const renaming =
     subjectChoice && subjectChoice !== NEW && current && name.trim() && name.trim() !== current.name;
   const creating = subjectChoice === NEW || (!occurrence.subject && name.trim());
@@ -230,6 +236,9 @@ export default function EditPeriodModal({ open, onClose, occurrence, subjects, f
             <Select value={scope} onChange={(e) => setScope(e.target.value)}>
               <option value="subject">
                 The whole subject — {current.code} becomes theirs everywhere
+              </option>
+              <option value="day">
+                Every {current.code} period on {weekday}s only
               </option>
               <option value="entry">This one period only</option>
             </Select>

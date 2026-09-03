@@ -10,8 +10,11 @@ import { firstName, formatDate } from '../../lib/format';
 function SubjectCard({ s }) {
   const progress = s.plannedClasses ? Math.min((s.conducted / s.plannedClasses) * 100, 100) : 0;
   const standIn = s.standingIn;
-  // A stand-in holds one register, not the subject — the report is not theirs.
-  const canSeeReport = !standIn || standIn.ownSubject;
+  const coTeach = s.coTeaching;
+  // A stand-in holds one register, not the subject — the report is not
+  // theirs. A co-teacher (a standing per-period split, not a one-off
+  // hand-over) genuinely shares the subject, so they see the report too.
+  const canSeeReport = (!standIn || standIn.ownSubject) || Boolean(coTeach);
 
   return (
     <Card className="flex flex-col p-5 transition hover:border-slate-300 hover:shadow-md hover:shadow-slate-900/[0.05]">
@@ -49,6 +52,29 @@ function SubjectCard({ s }) {
                   : `${standIn.classes.length} classes`}{' '}
                 only
               </p>
+            </div>
+          )}
+
+          {/*
+            A standing per-period split, not a one-off hand-over — shown from
+            whichever side this person sits on: the owner sees who else has a
+            day of it, a partner sees whose subject it otherwise is.
+          */}
+          {coTeach?.role === 'partner' && (
+            <div className="mt-1.5 rounded border border-indigo-200 bg-indigo-50 px-1.5 py-1 text-[11px] text-indigo-800">
+              <p className="font-medium">Co-teaching with {coTeach.mainTeacher || 'its lecturer'}</p>
+              <p className="mt-0.5">
+                {coTeach.days.join(', ')} {coTeach.days.length === 1 ? 'is' : 'are'} yours
+              </p>
+            </div>
+          )}
+          {coTeach?.role === 'owner' && (
+            <div className="mt-1.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-[11px] text-slate-600">
+              {coTeach.partners.map((p, i) => (
+                <p key={i} className={i > 0 ? 'mt-0.5' : ''}>
+                  <span className="font-medium">{p.name}</span> covers {p.days.join(', ')}
+                </p>
+              ))}
             </div>
           )}
         </div>

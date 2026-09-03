@@ -262,6 +262,18 @@ export const listSubjectOccurrences = asyncHandler(async (req, res) => {
   if (!subject) throw ApiError.notFound('Subject not found');
 
   /*
+   * Reaching this point without being the subject's own lecturer or an admin
+   * means assertSubjectAccess let them through on a standing per-period
+   * override — a subject split by day, not a stand-in. The occurrence list
+   * is narrowed the same way a delegation narrows it, just resolved per
+   * occurrence's actual faculty rather than a fixed list of dates.
+   */
+  const coTeaching =
+    !standingIn &&
+    req.user.role === 'faculty' &&
+    String(subject.faculty) !== String(req.user._id);
+
+  /*
    * Two different windows on purpose. The recurring grid only means anything
    * from the date it took effect, so scheduled classes are resolved from
    * there. Recorded sheets predate the grid — the register was being kept
@@ -298,6 +310,9 @@ export const listSubjectOccurrences = asyncHandler(async (req, res) => {
         origin: o.origin,
         movedFrom: o.movedFrom || null,
         reason: o.reason || '',
+        // Only needed to narrow a co-teacher's list below; stripped before
+        // this ever reaches the response.
+        faculty: o.faculty?.id || null,
       });
     }
   }
@@ -338,10 +353,14 @@ export const listSubjectOccurrences = asyncHandler(async (req, res) => {
       }
     }
     rows = rows.filter((o) => allowed.has(`${o.date}|${o.slot}`));
+  } else if (coTeaching) {
+    // Exactly the days actually resolved to this lecturer — a subject split
+    // by day never offers a class that still belongs to someone else.
+    rows = rows.filter((o) => o.faculty && String(o.faculty) === String(req.user._id));
   }
 
   const occurrences = rows
-    .map((o) => ({
+    .map(({ faculty, ...o }) => ({
       ...o,
       taken: Boolean(o.taken),
       slotLabel: labelOf(periods, o.slot),
@@ -636,7 +655,10 @@ export const markAttendance = asyncHandler(async (req, res) => {
 export const setSessionCancelled = asyncHandler(async (req, res) => {
   const session = await ClassSession.findById(req.params.sessionId);
   if (!session) throw ApiError.notFound('Class session not found');
-  const subject = await assertSubjectAccess(req.user, session.subject);
+  // Scoped to the exact class, not the whole subject — a lecturer covering
+  // one day of a split subject can cancel their own classes, never someone
+  // else's day of it.
+  const subject = await assertRegisterAccess(req.user, session.subject, session.dateKey, session.slot);
 
   session.status = req.body.cancelled ? 'cancelled' : 'completed';
   await session.save();
@@ -674,7 +696,8 @@ export const setSessionCancelled = asyncHandler(async (req, res) => {
 export const deleteSession = asyncHandler(async (req, res) => {
   const session = await ClassSession.findById(req.params.sessionId);
   if (!session) throw ApiError.notFound('Class session not found');
-  const subject = await assertSubjectAccess(req.user, session.subject);
+  // Same scoping as cancelling — deleting is even more final.
+  const subject = await assertRegisterAccess(req.user, session.subject, session.dateKey, session.slot);
 
   await Attendance.deleteMany({ session: session._id });
   await session.deleteOne();

@@ -43,11 +43,14 @@ const editEntrySchema = z.object({
 
   facultyId: z.string().length(24).nullable().optional(),
   /**
-   * 'subject' hands the whole subject to that lecturer — which is what fixing
-   * an unassigned class means. 'entry' changes this one period only, for a
-   * period genuinely taken by somebody else.
+   * 'subject' hands the whole subject to that lecturer everywhere it runs.
+   * 'day' hands them only this subject's periods on this one recurring day —
+   * a double or triple period is one sitting, so correcting it should not
+   * mean repeating the fix period by period, but it must not spill onto a
+   * different day the same subject also runs on. 'entry' changes this one
+   * period only, for a period genuinely taken by somebody else.
    */
-  applyFacultyTo: z.enum(['subject', 'entry']).optional().default('subject'),
+  applyFacultyTo: z.enum(['subject', 'day', 'entry']).optional().default('subject'),
 
   kind: z.enum(ENTRY_KINDS).optional(),
   title: z.string().trim().max(200).optional(),
@@ -136,6 +139,28 @@ export const editEntry = asyncHandler(async (req, res) => {
     if (body.applyFacultyTo === 'entry') {
       entry.faculty = person?._id || null;
       changes.push(person ? `${person.name} takes this period` : 'lecturer cleared here');
+    } else if (body.applyFacultyTo === 'day' && (entry.subject?._id || entry.subject)) {
+      const subjectId = entry.subject?._id || entry.subject;
+      const sectionId = entry.section?._id ?? entry.section ?? null;
+      // Every period of this same subject, this same day, for this same
+      // cohort — the whole block this one period belongs to.
+      const dayEntries = await TimetableEntry.find({
+        timetable: entry.timetable,
+        dayOfWeek: entry.dayOfWeek,
+        subject: subjectId,
+        section: sectionId,
+      }).select('_id');
+      await TimetableEntry.updateMany(
+        { _id: { $in: dayEntries.map((e) => e._id) } },
+        { $set: { faculty: person?._id || null } }
+      );
+      // Keeps entry.save() below from writing a stale value back over this.
+      entry.faculty = person?._id || null;
+      changes.push(
+        person
+          ? `${person.name} takes every period of this subject on ${dayName(entry.dayOfWeek)}`
+          : `lecturer cleared for every period of this subject on ${dayName(entry.dayOfWeek)}`
+      );
     } else {
       // A subject always has an owner — "left unassigned" would null out a
       // required field. Clearing for just this period is what 'entry' is for.
