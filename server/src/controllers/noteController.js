@@ -1,12 +1,9 @@
 import { z } from 'zod';
-import Note from '../models/Note.js';
-import Section from '../models/Section.js';
-import Subject from '../models/Subject.js';
-import User from '../models/User.js';
-import Enrollment from '../models/Enrollment.js';
+import { prisma } from '../config/prisma.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { idOf, sameId } from '../utils/ids.js';
+import { sectionIdOf } from '../utils/user.js';
 import { putFile, openFile, deleteFiles } from '../services/fileStore.js';
 import { notify, withdrawNotifications } from '../services/notificationService.js';
 
@@ -22,25 +19,21 @@ const uploadSchema = z.object({
   title: z.string().trim().min(2, 'Give these notes a title').max(200),
   description: z.string().trim().max(5000).optional().default(''),
   semester: z.coerce.number().int().min(1).max(10),
-  sectionId: z.string().length(24).nullable().optional(),
-  subjectId: z.string().length(24).nullable().optional(),
+  sectionId: z.string().uuid().nullable().optional(),
+  subjectId: z.string().uuid().nullable().optional(),
 });
 
 const shape = (n) => ({
-  id: String(n._id),
+  id: n.id,
   title: n.title,
   description: n.description,
   semester: n.semester,
-  section: n.section ? { id: String(n.section._id ?? n.section), name: n.section.name } : null,
-  subject: n.subject
-    ? { id: String(n.subject._id ?? n.subject), code: n.subject.code, name: n.subject.name }
-    : null,
-  uploadedBy: n.uploadedBy?.name
-    ? { id: String(n.uploadedBy._id), name: n.uploadedBy.name }
-    : null,
+  section: n.section ? { id: n.section.id, name: n.section.name } : null,
+  subject: n.subject ? { id: n.subject.id, code: n.subject.code, name: n.subject.name } : null,
+  uploadedBy: n.uploadedBy?.name ? { id: n.uploadedBy.id, name: n.uploadedBy.name } : null,
   postedOn: n.createdAt,
   attachments: (n.attachments || []).map((a) => ({
-    id: String(a._id),
+    id: a.id,
     filename: a.filename,
     contentType: a.contentType,
     size: a.size,
@@ -77,49 +70,54 @@ async function scopeFor(user, query) {
     return {
       semester: user.semester,
       // Their section's material, plus anything addressed to the whole year.
-      $or: [{ section: idOf(user.section) || null }, { section: null }],
+      OR: [{ sectionId: sectionIdOf(user) }, { sectionId: null }],
     };
   }
 
   if (user.role === 'faculty') {
-    const taught = await Subject.find({ faculty: user._id, isActive: true })
-      .select('semester section')
-      .lean();
+    const taught = await prisma.subject.findMany({
+      where: { facultyId: idOf(user), isActive: true },
+      select: { semester: true, sectionId: true },
+    });
 
     // A cohort they teach: their own semester, and — when they teach one
     // specific section — either that section's notes or ones addressed to
     // the whole year. Teaching a whole undivided year opens every section's
     // notes in that semester, since there is nothing narrower to teach.
     const cohortClauses = taught.map((s) =>
-      s.section
-        ? { semester: s.semester, $or: [{ section: s.section }, { section: null }] }
+      s.sectionId
+        ? { semester: s.semester, OR: [{ sectionId: s.sectionId }, { sectionId: null }] }
         : { semester: s.semester }
     );
 
     if (!cohortClauses.length) {
       // Teaches nothing yet: their own uploads are the only thing to show.
-      return { uploadedBy: user._id };
+      return { uploadedById: idOf(user) };
     }
 
-    return { $or: [{ uploadedBy: user._id }, ...cohortClauses] };
+    return { OR: [{ uploadedById: idOf(user) }, ...cohortClauses] };
   }
 
-  const filter = {};
-  if (query.semester) filter.semester = Number(query.semester);
-  if (query.section) filter.section = query.section;
-  if (query.subject) filter.subject = query.subject;
-  if (query.mine === 'true') filter.uploadedBy = user._id;
-  return filter;
+  const where = {};
+  if (query.semester) where.semester = Number(query.semester);
+  if (query.section) where.sectionId = query.section;
+  if (query.subject) where.subjectId = query.subject;
+  if (query.mine === 'true') where.uploadedById = idOf(user);
+  return where;
 }
 
 export const listNotes = asyncHandler(async (req, res) => {
-  const notes = await Note.find(await scopeFor(req.user, req.query))
-    .populate('section', 'name')
-    .populate('subject', 'code name')
-    .populate('uploadedBy', 'name')
-    .sort({ createdAt: -1 })
-    .limit(300)
-    .lean();
+  const notes = await prisma.note.findMany({
+    where: await scopeFor(req.user, req.query),
+    include: {
+      section: { select: { id: true, name: true } },
+      subject: { select: { id: true, code: true, name: true } },
+      uploadedBy: { select: { id: true, name: true } },
+      attachments: { orderBy: { createdAt: 'asc' } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 300,
+  });
 
   res.json({ success: true, data: notes.map(shape) });
 });
@@ -134,15 +132,16 @@ export const listNotes = asyncHandler(async (req, res) => {
  */
 async function cohortFor({ subject, section, semester }) {
   if (subject) {
-    const rows = await Enrollment.find({ subject: subject._id, isActive: true })
-      .select('student')
-      .lean();
-    if (rows.length) return rows.map((r) => idOf(r.student));
+    const rows = await prisma.enrollment.findMany({
+      where: { subjectId: subject.id, isActive: true },
+      select: { studentId: true },
+    });
+    if (rows.length) return rows.map((r) => r.studentId);
   }
-  const filter = { role: 'student', isActive: true };
-  if (section) filter.section = section._id;
-  else filter.semester = semester;
-  const rows = await User.find(filter).select('_id').lean();
+  const where = { role: 'student', isActive: true };
+  if (section) where.sectionId = section.id;
+  else where.semester = semester;
+  const rows = await prisma.user.findMany({ where, select: { id: true } });
   return rows.map(idOf);
 }
 
@@ -155,7 +154,7 @@ export const createNote = asyncHandler(async (req, res) => {
 
   let section = null;
   if (sectionId) {
-    section = await Section.findById(sectionId);
+    section = await prisma.section.findUnique({ where: { id: sectionId } });
     if (!section) throw ApiError.notFound('Section not found');
     if (section.semester !== semester) {
       throw ApiError.badRequest('That section belongs to a different semester');
@@ -164,14 +163,14 @@ export const createNote = asyncHandler(async (req, res) => {
 
   let subject = null;
   if (subjectId) {
-    subject = await Subject.findById(subjectId);
+    subject = await prisma.subject.findUnique({ where: { id: subjectId } });
     if (!subject) throw ApiError.notFound('Subject not found');
     /*
      * A lecturer publishes against their own subject. Without this a teacher
      * could file material under a colleague's subject, where it would look
      * like the colleague had posted it.
      */
-    if (req.user.role === 'faculty' && !sameId(subject.faculty, req.user._id)) {
+    if (req.user.role === 'faculty' && !sameId(subject.facultyId, req.user)) {
       throw ApiError.forbidden('You do not teach that subject');
     }
   }
@@ -184,19 +183,20 @@ export const createNote = asyncHandler(async (req, res) => {
           buffer: f.buffer,
           filename: f.originalname,
           contentType: f.mimetype,
-          meta: { kind: 'note', semester, uploadedBy: String(req.user._id) },
         })
       );
     }
 
-    const note = await Note.create({
-      title,
-      description,
-      semester,
-      section: section?._id || null,
-      subject: subject?._id || null,
-      attachments: stored,
-      uploadedBy: req.user._id,
+    const note = await prisma.note.create({
+      data: {
+        title,
+        description,
+        semester,
+        sectionId: section?.id || null,
+        subjectId: subject?.id || null,
+        uploadedById: idOf(req.user),
+        attachments: { create: stored },
+      },
     });
 
     // Tell the cohort it is there — material nobody knows about helps nobody.
@@ -207,17 +207,21 @@ export const createNote = asyncHandler(async (req, res) => {
         title: 'New notes published',
         message: `${title}${subject ? ` · ${subject.code}` : ''} — from ${req.user.name}`,
         link: '/notes',
-        createdBy: req.user._id,
+        createdBy: idOf(req.user),
         // Tagged so the notification can be taken back if these are removed.
-        meta: { noteId: String(note._id) },
+        meta: { noteId: note.id },
       });
     }
 
-    const full = await Note.findById(note._id)
-      .populate('section', 'name')
-      .populate('subject', 'code name')
-      .populate('uploadedBy', 'name')
-      .lean();
+    const full = await prisma.note.findUnique({
+      where: { id: note.id },
+      include: {
+        section: { select: { id: true, name: true } },
+        subject: { select: { id: true, code: true, name: true } },
+        uploadedBy: { select: { id: true, name: true } },
+        attachments: { orderBy: { createdAt: 'asc' } },
+      },
+    });
 
     res.status(201).json({ success: true, message: 'Notes published', data: shape(full) });
   } catch (err) {
@@ -235,26 +239,30 @@ export const createNote = asyncHandler(async (req, res) => {
  * they see never surfaced it in the first place.
  */
 async function loadVisible(user, noteId) {
-  const note = await Note.findById(noteId);
+  const note = await prisma.note.findUnique({
+    where: { id: noteId },
+    include: { attachments: true },
+  });
   if (!note) throw ApiError.notFound('Those notes no longer exist');
 
   if (user.role === 'student') {
     const sameYear = Number(note.semester) === Number(user.semester);
     // No section means the whole year; otherwise it has to be their own.
-    const forThem = !note.section || sameId(note.section, user.section);
+    const forThem = !note.sectionId || sameId(note.sectionId, sectionIdOf(user));
     if (!sameYear || !forThem) throw ApiError.forbidden('Those notes are not for your class');
   }
 
-  if (user.role === 'faculty' && !sameId(note.uploadedBy, user._id)) {
-    const taught = await Subject.find({ faculty: user._id, isActive: true })
-      .select('semester section')
-      .lean();
+  if (user.role === 'faculty' && !sameId(note.uploadedById, user)) {
+    const taught = await prisma.subject.findMany({
+      where: { facultyId: idOf(user), isActive: true },
+      select: { semester: true, sectionId: true },
+    });
     const coversCohort = taught.some(
       (s) =>
         s.semester === note.semester &&
         // Teaching the whole undivided year opens every section in it; teaching
         // one section opens that section's notes plus whole-year ones.
-        (!s.section || !note.section || sameId(s.section, note.section))
+        (!s.sectionId || !note.sectionId || sameId(s.sectionId, note.sectionId))
     );
     if (!coversCohort) throw ApiError.forbidden('Those notes are not for a class you teach');
   }
@@ -264,9 +272,7 @@ async function loadVisible(user, noteId) {
 export const downloadNoteFile = asyncHandler(async (req, res) => {
   const note = await loadVisible(req.user, req.params.noteId);
 
-  const attachment = (note.attachments || []).find(
-    (a) => sameId(a._id, req.params.attachmentId)
-  );
+  const attachment = (note.attachments || []).find((a) => sameId(a, req.params.attachmentId));
   if (!attachment) throw ApiError.notFound('That file is not on these notes');
 
   const { file, stream } = await openFile(attachment.fileId);
@@ -289,21 +295,30 @@ export const downloadNoteFile = asyncHandler(async (req, res) => {
 
 /** Withdraw notes you published, or remove any as an administrator. */
 export const deleteNote = asyncHandler(async (req, res) => {
-  const note = await Note.findById(req.params.noteId);
+  const note = await prisma.note.findUnique({
+    where: { id: req.params.noteId },
+    include: { attachments: true },
+  });
   if (!note) throw ApiError.notFound('Those notes no longer exist');
 
-  const mine = sameId(note.uploadedBy, req.user._id);
+  const mine = sameId(note.uploadedById, req.user);
   if (req.user.role !== 'admin' && !mine) {
     throw ApiError.forbidden('You can only remove notes you published');
   }
 
-  await deleteFiles((note.attachments || []).map((a) => a.fileId));
   // Nobody should keep being pointed at material that is gone.
   await withdrawNotifications({
     type: 'note:published',
-    meta: { path: ['noteId'], equals: idOf(note) },
+    meta: { path: ['noteId'], equals: note.id },
   });
-  await note.deleteOne();
+  /*
+   * The record first, then the bytes. Reversed — as this was — the file rows
+   * are still referenced by the attachments hanging off the note, and the
+   * foreign key refuses the delete. It only worked before because Mongo had
+   * no such reference to object to.
+   */
+  await prisma.note.delete({ where: { id: note.id } });
+  await deleteFiles((note.attachments || []).map((a) => a.fileId));
 
-  res.json({ success: true, message: 'Notes removed', data: { id: String(note._id) } });
+  res.json({ success: true, message: 'Notes removed', data: { id: note.id } });
 });
