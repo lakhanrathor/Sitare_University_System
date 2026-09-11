@@ -175,16 +175,39 @@ export const editEntry = asyncHandler(async (req, res) => {
           'A subject must have a lecturer — clear the lecturer for just this period instead, or choose a replacement.'
         );
       }
-      // Assign the subject itself, so nothing anywhere still reads unassigned.
+      /*
+       * "Becomes theirs everywhere" has to mean everywhere. Handing the
+       * subject over is only half of it: each period can carry its own
+       * lecturer, and any period still holding one goes on displaying the
+       * previous lecturer no matter who owns the subject. Clearing them is
+       * what makes the rest of the grid follow — without it exactly one cell
+       * changed, the one that was clicked, and the option silently did
+       * something much narrower than it offered.
+       *
+       * Both in one transaction: a subject owned by one lecturer while its
+       * periods still name another is the inconsistency this is fixing.
+       */
+      let followed = 0;
       if (entry.subjectId) {
-        await prisma.subject.update({
-          where: { id: entry.subjectId },
-          data: { facultyId: person.id },
-        });
+        const [, cleared] = await prisma.$transaction([
+          prisma.subject.update({
+            where: { id: entry.subjectId },
+            data: { facultyId: person.id },
+          }),
+          prisma.timetableEntry.updateMany({
+            where: { subjectId: entry.subjectId, facultyId: { not: null } },
+            data: { facultyId: null },
+          }),
+        ]);
+        followed = cleared.count;
       }
-      // Clear the per-period override so the cell inherits the new owner.
+      // This period inherits the new owner along with the rest.
       data.facultyId = null;
-      changes.push(`assigned to ${person.name}`);
+      changes.push(
+        followed > 1
+          ? `assigned to ${person.name} — ${followed} periods now follow the subject`
+          : `assigned to ${person.name}`
+      );
     }
   }
 
