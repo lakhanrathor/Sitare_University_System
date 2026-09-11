@@ -1,14 +1,10 @@
 import { z } from 'zod';
-import mongoose from 'mongoose';
-import TimetableEntry from '../models/TimetableEntry.js';
-import ScheduleChange from '../models/ScheduleChange.js';
-import Section from '../models/Section.js';
+import { prisma } from '../config/prisma.js';
 import { sectionLabel } from '../utils/section.js';
-import Subject from '../models/Subject.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { toUTCDate, todayKey, dayOfWeek } from '../utils/date.js';
-import { sameId } from '../utils/ids.js';
+import { idOf, sameId } from '../utils/ids.js';
 import { isTeachingDay, dayName } from '../config/slots.js';
 import {
   findConflicts,
@@ -69,8 +65,7 @@ function assertBookableDate(key) {
 function assertOwnsEntry(user, entry) {
   if (user.role === 'admin') return;
   const owns =
-    (entry.faculty && sameId(entry.faculty, user._id)) ||
-    (entry.subject?.faculty && sameId(entry.subject.faculty, user._id));
+    sameId(entry.facultyId, user) || sameId(entry.subject?.facultyId, user);
   if (!owns) throw ApiError.forbidden('This period belongs to another faculty member');
 }
 
@@ -102,19 +97,22 @@ export const listFreeSlots = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: { date, slots: [] } });
   }
 
-  const sections = await Section.find({ isActive: true }).sort({ name: 1 }).lean();
+  const sections = await prisma.section.findMany({
+    where: { isActive: true },
+    orderBy: { name: 'asc' },
+  });
   let scoped = req.query.section
-    ? sections.filter((s) => sameId(s._id, req.query.section))
+    ? sections.filter((s) => sameId(s, req.query.section))
     : sections;
   if (req.query.semester) {
     scoped = scoped.filter((s) => s.semester === Number(req.query.semester));
   }
 
   const slots = await getFreeSlots(date, {
-    facultyId: req.user.role === 'faculty' ? String(req.user._id) : null,
+    facultyId: req.user.role === 'faculty' ? idOf(req.user) : null,
     // Semester travels with each cohort: a whole-year period only blocks its
     // own year, so the free list has to know which year each section is in.
-    sections: scoped.map((s) => ({ id: s._id, name: s.name, semester: s.semester })),
+    sections: scoped.map((s) => ({ id: s.id, name: s.name, semester: s.semester })),
     semester: req.query.semester || scoped[0]?.semester,
   });
 
@@ -123,18 +121,21 @@ export const listFreeSlots = asyncHandler(async (req, res) => {
 
 /** Subjects the caller may schedule an extra class for, in a given section. */
 export const listBookableSubjects = asyncHandler(async (req, res) => {
-  const filter = { isActive: true };
-  if (req.query.section) filter.section = req.query.section;
-  if (req.user.role === 'faculty') filter.faculty = req.user._id;
+  const where = { isActive: true };
+  if (req.query.section) where.sectionId = req.query.section;
+  if (req.user.role === 'faculty') where.facultyId = idOf(req.user);
 
-  const subjects = await Subject.find(filter).populate('section', 'name').lean();
+  const subjects = await prisma.subject.findMany({
+    where,
+    include: { section: { select: { id: true, name: true } } },
+  });
   res.json({
     success: true,
     data: subjects.map((s) => ({
-      id: String(s._id),
+      id: s.id,
       code: s.code,
       name: s.name,
-      section: s.section ? { id: String(s.section._id), name: s.section.name } : null,
+      section: s.section ? { id: s.section.id, name: s.section.name } : null,
     })),
   });
 });
@@ -153,7 +154,7 @@ export const bookExtraClass = asyncHandler(async (req, res) => {
 
   assertBookableDate(date);
 
-  const section = await Section.findById(sectionId);
+  const section = await prisma.section.findUnique({ where: { id: sectionId } });
   if (!section) throw ApiError.notFound('Section not found');
 
   const timetable = await getPublishedTimetable(section.semester);
@@ -165,24 +166,28 @@ export const bookExtraClass = asyncHandler(async (req, res) => {
 
   let subject = null;
   if (subjectId) {
-    subject = await Subject.findById(subjectId).populate('section', 'name');
+    subject = await prisma.subject.findUnique({
+      where: { id: subjectId },
+      include: { section: { select: { id: true, name: true } } },
+    });
     if (!subject) throw ApiError.notFound('Subject not found');
-    if (!sameId(subject.section?._id, section._id)) {
+    if (!sameId(subject.sectionId, section)) {
       throw ApiError.badRequest(`${subject.code} is not offered to section ${section.name}`);
     }
-    if (req.user.role === 'faculty' && !sameId(subject.faculty, req.user._id)) {
+    if (req.user.role === 'faculty' && !sameId(subject.facultyId, req.user)) {
       throw ApiError.forbidden('You do not teach that subject');
     }
   } else if (!title) {
     throw ApiError.badRequest('Choose a subject, or give the session a title');
   }
 
-  const facultyId = req.user.role === 'faculty' ? req.user._id : subject?.faculty || req.user._id;
+  const facultyId =
+    req.user.role === 'faculty' ? idOf(req.user) : subject?.facultyId || idOf(req.user);
 
   const conflicts = await findConflicts({
     dateKey: date,
     slot,
-    sectionId: section._id,
+    sectionId: section.id,
     facultyId,
     semester: section.semester,
   });
@@ -207,46 +212,48 @@ export const bookExtraClass = asyncHandler(async (req, res) => {
     );
   }
 
-  const change = await ScheduleChange.create({
-    kind: 'extra',
-    timetable: timetable?._id || null,
-    date: toUTCDate(date),
-    dateKey: date,
-    section: section._id,
-    subject: subject?._id || null,
-    faculty: facultyId,
-    slot,
-    kindOfClass: kind,
-    title: title || '',
-    room,
-    reason,
-    createdBy: req.user._id,
+  const change = await prisma.scheduleChange.create({
+    data: {
+      kind: 'extra',
+      timetableId: timetable?.id || null,
+      date: toUTCDate(date),
+      dateKey: date,
+      sectionId: section.id,
+      subjectId: subject?.id || null,
+      facultyId,
+      slot,
+      kindOfClass: kind,
+      title: title || '',
+      room,
+      reason,
+      createdById: idOf(req.user),
+    },
   });
 
   const label = subject ? `${subject.code} ${subject.name}` : title;
-  const staff = await facultyAndAdminIds({ exclude: [req.user._id] });
+  const staff = await facultyAndAdminIds({ exclude: [idOf(req.user)] });
 
   await notify(staff, {
     type: 'schedule:extra',
     title: 'Period booked',
     message: `${req.user.name} booked ${slotLabel(slot)} on ${date} (Section ${section.name}) for ${label}.`,
     link: `/timetable?date=${date}`,
-    createdBy: req.user._id,
-    meta: { date, slot, sectionId: String(section._id) },
+    createdBy: idOf(req.user),
+    meta: { date, slot, sectionId: section.id },
   });
 
-  const students = await audience(subject?._id, section._id);
+  const students = await audience(subject?.id, section.id);
   if (students.length) {
     await notify(students, {
       type: 'schedule:extra',
       title: subject ? 'Extra class scheduled' : 'Session added to your timetable',
       message: `${label} — ${slotLabel(slot)} on ${date}${reason ? `. ${reason}` : '.'}`,
       link: `/timetable?date=${date}`,
-      createdBy: req.user._id,
+      createdBy: idOf(req.user),
     });
   }
 
-  emitToUsers([...staff, ...students, String(req.user._id)], 'timetable:changed', {
+  emitToUsers([...staff, ...students, idOf(req.user)], 'timetable:changed', {
     reason: 'extra',
     date,
   });
@@ -254,7 +261,7 @@ export const bookExtraClass = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     message: `${slotLabel(slot)} booked for section ${section.name}`,
-    data: { changeId: String(change._id), date, slot },
+    data: { changeId: change.id, date, slot },
   });
 });
 
@@ -270,10 +277,14 @@ export const bookExtraClass = asyncHandler(async (req, res) => {
 export const moveClass = asyncHandler(async (req, res) => {
   const { entryId, date, toDate, toSlot, reason } = req.body;
 
-  const entry = await TimetableEntry.findById(entryId)
-    .populate('subject', 'code name faculty section')
-    .populate('section', 'name semester')
-    .populate('faculty', 'name');
+  const entry = await prisma.timetableEntry.findUnique({
+    where: { id: entryId },
+    include: {
+      subject: { select: { id: true, code: true, name: true, facultyId: true, sectionId: true, semester: true } },
+      section: { select: { id: true, name: true, semester: true } },
+      faculty: { select: { id: true, name: true } },
+    },
+  });
   if (!entry) throw ApiError.notFound('That period is not on the timetable');
 
   assertOwnsEntry(req.user, entry);
@@ -291,16 +302,14 @@ export const moveClass = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('That is already the scheduled period');
   }
 
-  const existing = await ScheduleChange.findOne({
-    entry: entry._id,
-    dateKey: date,
-    kind: { $in: ['move', 'cancel'] },
+  const existing = await prisma.scheduleChange.findFirst({
+    where: { entryId: entry.id, dateKey: date, kind: { in: ['move', 'cancel'] } },
   });
   if (existing) {
     throw ApiError.conflict('This class has already been moved or cancelled on that date');
   }
 
-  const facultyId = entry.faculty?._id || entry.subject?.faculty;
+  const facultyId = entry.facultyId || entry.subject?.facultyId;
   const conflicts = await findConflicts({
     dateKey: toDate,
     slot: toSlot,
@@ -308,11 +317,11 @@ export const moveClass = asyncHandler(async (req, res) => {
      * A period on an undivided semester has no section — that year never
      * split — so it is the whole year's cohort rather than one section's.
      */
-    sectionId: entry.section?._id || null,
-    wholeYear: !entry.section,
+    sectionId: entry.sectionId || null,
+    wholeYear: !entry.sectionId,
     facultyId,
     semester: entry.section?.semester ?? entry.subject?.semester,
-    ignoreEntryIds: [entry._id],
+    ignoreEntryIds: [entry.id],
   });
   if (conflicts.section) {
     const c = conflicts.section;
@@ -331,28 +340,30 @@ export const moveClass = asyncHandler(async (req, res) => {
     );
   }
 
-  const change = await ScheduleChange.create({
-    kind: 'move',
-    timetable: entry.timetable,
-    date: toUTCDate(date),
-    dateKey: date,
-    entry: entry._id,
-    fromSlot: entry.slot,
-    toDate: toUTCDate(toDate),
-    toDateKey: toDate,
-    toSlot,
-    section: entry.section?._id || null,
-    subject: entry.subject?._id || null,
-    faculty: facultyId || null,
-    kindOfClass: entry.kind,
-    title: entry.title,
-    reason,
-    createdBy: req.user._id,
+  const change = await prisma.scheduleChange.create({
+    data: {
+      kind: 'move',
+      timetableId: entry.timetableId,
+      date: toUTCDate(date),
+      dateKey: date,
+      entryId: entry.id,
+      fromSlot: entry.slot,
+      toDate: toUTCDate(toDate),
+      toDateKey: toDate,
+      toSlot,
+      sectionId: entry.sectionId || null,
+      subjectId: entry.subjectId || null,
+      facultyId: facultyId || null,
+      kindOfClass: entry.kind,
+      title: entry.title,
+      reason,
+      createdById: idOf(req.user),
+    },
   });
 
   // Keep an already-taken sheet attached to the class it belongs to.
   const attendance = await moveAttendanceSession({
-    subjectId: entry.subject?._id,
+    subjectId: entry.subjectId,
     fromDateKey: date,
     fromSlot: entry.slot,
     toDateKey: toDate,
@@ -361,8 +372,8 @@ export const moveClass = asyncHandler(async (req, res) => {
   });
 
   const label = entry.subject ? `${entry.subject.code} ${entry.subject.name}` : entry.title;
-  const staff = await facultyAndAdminIds({ exclude: [req.user._id] });
-  const students = await audience(entry.subject?._id, entry.section?._id);
+  const staff = await facultyAndAdminIds({ exclude: [idOf(req.user)] });
+  const students = await audience(entry.subjectId, entry.sectionId);
 
   const msg = `${label} (${sectionLabel(entry.section)}) moved from ${slotLabel(entry.slot)} on ${date} to ${slotLabel(toSlot)} on ${toDate}.`;
 
@@ -371,7 +382,7 @@ export const moveClass = asyncHandler(async (req, res) => {
     title: 'Class rescheduled',
     message: `${req.user.name}: ${msg}`,
     link: `/timetable?date=${toDate}`,
-    createdBy: req.user._id,
+    createdBy: idOf(req.user),
   });
   if (students.length) {
     await notify(students, {
@@ -379,11 +390,11 @@ export const moveClass = asyncHandler(async (req, res) => {
       title: 'Your class moved',
       message: msg,
       link: `/timetable?date=${toDate}`,
-      createdBy: req.user._id,
+      createdBy: idOf(req.user),
     });
   }
 
-  emitToUsers([...staff, ...students, String(req.user._id)], 'timetable:changed', {
+  emitToUsers([...staff, ...students, idOf(req.user)], 'timetable:changed', {
     reason: 'move',
     date,
     toDate,
@@ -393,7 +404,7 @@ export const moveClass = asyncHandler(async (req, res) => {
     success: true,
     message: `Moved to ${slotLabel(toSlot)} on ${toDate}`,
     data: {
-      changeId: String(change._id),
+      changeId: change.id,
       attendanceMoved: Boolean(attendance?.moved),
       attendanceNote: attendance?.reason || null,
     },
@@ -407,10 +418,14 @@ export const moveClass = asyncHandler(async (req, res) => {
 export const cancelClass = asyncHandler(async (req, res) => {
   const { entryId, date, reason } = req.body;
 
-  const entry = await TimetableEntry.findById(entryId)
-    .populate('subject', 'code name faculty')
-    .populate('section', 'name semester')
-    .populate('faculty', 'name');
+  const entry = await prisma.timetableEntry.findUnique({
+    where: { id: entryId },
+    include: {
+      subject: { select: { id: true, code: true, name: true, facultyId: true, semester: true } },
+      section: { select: { id: true, name: true, semester: true } },
+      faculty: { select: { id: true, name: true } },
+    },
+  });
   if (!entry) throw ApiError.notFound('That period is not on the timetable');
 
   assertOwnsEntry(req.user, entry);
@@ -420,39 +435,39 @@ export const cancelClass = asyncHandler(async (req, res) => {
 
   const slotLabel = await slotNamer(entry.subject?.semester || entry.section?.semester);
 
-  const existing = await ScheduleChange.findOne({
-    entry: entry._id,
-    dateKey: date,
-    kind: { $in: ['move', 'cancel'] },
+  const existing = await prisma.scheduleChange.findFirst({
+    where: { entryId: entry.id, dateKey: date, kind: { in: ['move', 'cancel'] } },
   });
   if (existing) throw ApiError.conflict('This class has already been moved or cancelled');
 
-  const change = await ScheduleChange.create({
-    kind: 'cancel',
-    timetable: entry.timetable,
-    date: toUTCDate(date),
-    dateKey: date,
-    entry: entry._id,
-    fromSlot: entry.slot,
-    section: entry.section?._id || null,
-    subject: entry.subject?._id || null,
-    faculty: entry.faculty?._id || entry.subject?.faculty || null,
-    kindOfClass: entry.kind,
-    title: entry.title,
-    reason,
-    createdBy: req.user._id,
+  const change = await prisma.scheduleChange.create({
+    data: {
+      kind: 'cancel',
+      timetableId: entry.timetableId,
+      date: toUTCDate(date),
+      dateKey: date,
+      entryId: entry.id,
+      fromSlot: entry.slot,
+      sectionId: entry.sectionId || null,
+      subjectId: entry.subjectId || null,
+      facultyId: entry.facultyId || entry.subject?.facultyId || null,
+      kindOfClass: entry.kind,
+      title: entry.title,
+      reason,
+      createdById: idOf(req.user),
+    },
   });
 
   // A class that never happened must not count in the attendance denominator.
   await cancelAttendanceSession({
-    subjectId: entry.subject?._id,
+    subjectId: entry.subjectId,
     dateKey: date,
     slot: entry.slot,
   });
 
   const label = entry.subject ? `${entry.subject.code} ${entry.subject.name}` : entry.title;
-  const staff = await facultyAndAdminIds({ exclude: [req.user._id] });
-  const students = await audience(entry.subject?._id, entry.section?._id);
+  const staff = await facultyAndAdminIds({ exclude: [idOf(req.user)] });
+  const students = await audience(entry.subjectId, entry.sectionId);
   const msg = `${label} (${sectionLabel(entry.section)}) at ${slotLabel(entry.slot)} on ${date} is cancelled${reason ? ` — ${reason}` : '.'}`;
 
   await notify([...staff, ...students], {
@@ -460,10 +475,10 @@ export const cancelClass = asyncHandler(async (req, res) => {
     title: 'Class cancelled',
     message: msg,
     link: `/timetable?date=${date}`,
-    createdBy: req.user._id,
+    createdBy: idOf(req.user),
   });
 
-  emitToUsers([...staff, ...students, String(req.user._id)], 'timetable:changed', {
+  emitToUsers([...staff, ...students, idOf(req.user)], 'timetable:changed', {
     reason: 'cancel',
     date,
   });
@@ -471,13 +486,16 @@ export const cancelClass = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     message: 'Class cancelled',
-    data: { changeId: String(change._id) },
+    data: { changeId: change.id },
   });
 });
 
 /** Undo an extra booking, a move or a cancellation. */
 export const undoChange = asyncHandler(async (req, res) => {
-  const change = await ScheduleChange.findById(req.params.changeId).populate('section', 'name');
+  const change = await prisma.scheduleChange.findUnique({
+    where: { id: req.params.changeId },
+    include: { section: { select: { id: true, name: true } } },
+  });
   if (!change) throw ApiError.notFound('Change not found');
 
   /*
@@ -486,10 +504,10 @@ export const undoChange = asyncHandler(async (req, res) => {
    * on its own would leave the two classes out of step.
    */
   if (req.user.role !== 'admin') {
-    if (change.swapRequest) {
+    if (change.swapRequestId) {
       throw ApiError.forbidden('Only an admin can unpick an approved swap');
     }
-    if (!sameId(change.createdBy, req.user._id)) {
+    if (!sameId(change.createdById, req.user)) {
       throw ApiError.forbidden('Only the person who made this change, or an admin, can undo it');
     }
   }
@@ -497,28 +515,28 @@ export const undoChange = asyncHandler(async (req, res) => {
   // Put an already-taken sheet back where it started.
   if (change.kind === 'move') {
     await moveAttendanceSession({
-      subjectId: change.subject,
+      subjectId: change.subjectId,
       fromDateKey: change.toDateKey,
       fromSlot: change.toSlot,
       toDateKey: change.dateKey,
       toSlot: change.fromSlot,
-      facultyId: change.faculty,
+      facultyId: change.facultyId,
     });
   }
 
   const affectedDates = [change.dateKey, change.toDateKey].filter(Boolean);
-  await change.deleteOne();
+  await prisma.scheduleChange.delete({ where: { id: change.id } });
 
-  const staff = await facultyAndAdminIds({ exclude: [req.user._id] });
-  const students = await audience(change.subject, change.section?._id);
+  const staff = await facultyAndAdminIds({ exclude: [idOf(req.user)] });
+  const students = await audience(change.subjectId, change.sectionId);
   await notify([...staff, ...students], {
     type: 'schedule:reverted',
     title: 'Schedule change undone',
     message: `${req.user.name} reverted a ${change.kind} on ${change.dateKey}.`,
     link: `/timetable?date=${change.dateKey}`,
-    createdBy: req.user._id,
+    createdBy: idOf(req.user),
   });
-  emitToUsers([...staff, ...students, String(req.user._id)], 'timetable:changed', {
+  emitToUsers([...staff, ...students, idOf(req.user)], 'timetable:changed', {
     reason: 'undo',
     dates: affectedDates,
   });
@@ -528,25 +546,28 @@ export const undoChange = asyncHandler(async (req, res) => {
 
 /** Recent deviations from the grid — an audit trail for admins and staff. */
 export const listChanges = asyncHandler(async (req, res) => {
-  const filter = {};
-  if (req.query.from) filter.dateKey = { $gte: req.query.from };
+  const where = {};
+  if (req.query.from) where.dateKey = { gte: req.query.from };
   if (req.user.role === 'faculty' && req.query.mine === 'true') {
-    filter.$or = [{ createdBy: req.user._id }, { faculty: req.user._id }];
+    where.OR = [{ createdById: idOf(req.user) }, { facultyId: idOf(req.user) }];
   }
 
-  const changes = await ScheduleChange.find(filter)
-    .sort({ createdAt: -1 })
-    .limit(60)
-    .populate('subject', 'code name')
-    .populate('section', 'name')
-    .populate('faculty', 'name')
-    .populate('createdBy', 'name')
-    .lean();
+  const changes = await prisma.scheduleChange.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: 60,
+    include: {
+      subject: { select: { code: true, name: true } },
+      section: { select: { name: true } },
+      faculty: { select: { name: true } },
+      createdBy: { select: { name: true } },
+    },
+  });
 
   res.json({
     success: true,
     data: changes.map((c) => ({
-      id: String(c._id),
+      id: c.id,
       kind: c.kind,
       date: c.dateKey,
       toDate: c.toDateKey,
@@ -559,7 +580,7 @@ export const listChanges = asyncHandler(async (req, res) => {
       faculty: c.faculty?.name || null,
       createdBy: c.createdBy?.name || null,
       reason: c.reason,
-      fromSwap: Boolean(c.swapRequest),
+      fromSwap: Boolean(c.swapRequestId),
       createdAt: c.createdAt,
     })),
   });

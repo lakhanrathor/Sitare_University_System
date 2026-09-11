@@ -228,7 +228,7 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
       if (!c.entry) continue;
       list.push(
         toOccurrence(c.entry, dateKey, c.toSlot, {
-          origin: c.swapRequest ? 'swapped-in' : 'moved-in',
+          origin: c.swapRequestId ? 'swapped-in' : 'moved-in',
           movedFrom: { date: c.dateKey, slot: c.fromSlot ?? c.entry.slot },
           reason: c.reason,
           changeId: c.id,
