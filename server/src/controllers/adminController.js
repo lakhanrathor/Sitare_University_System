@@ -1,15 +1,6 @@
 import { z } from 'zod';
-import User from '../models/User.js';
-import Section, { sectionLabel } from '../models/Section.js';
-import Subject from '../models/Subject.js';
-import Enrollment from '../models/Enrollment.js';
-import ClassSession from '../models/ClassSession.js';
-import Attendance from '../models/Attendance.js';
-import SwapRequest from '../models/SwapRequest.js';
-import ScheduleChange from '../models/ScheduleChange.js';
-import Timetable from '../models/Timetable.js';
-import TimetableEntry from '../models/TimetableEntry.js';
-import LeaveDocument from '../models/LeaveDocument.js';
+import { prisma } from '../config/prisma.js';
+import { sectionLabel } from '../utils/section.js';
 import ApiError from '../utils/ApiError.js';
 import { getOverallForStudents, getStudentSummary } from '../services/attendanceService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -17,6 +8,7 @@ import { parseCSVToObjects } from '../utils/csv.js';
 import { parseStudentsPDF } from '../services/pdfParser.js';
 import { todayKey, addDays } from '../utils/date.js';
 import { idOf, sameId } from '../utils/ids.js';
+import { hashPassword } from '../utils/user.js';
 import { notify } from '../services/notificationService.js';
 import {
   purgeSection,
@@ -122,28 +114,30 @@ export const getOverview = asyncHandler(async (_req, res) => {
     unassignedStudents,
     subjectsNoFacultyList,
   ] = await Promise.all([
-    User.countDocuments({ role: 'student', isActive: true }),
-    User.countDocuments({ role: 'faculty', isActive: true }),
-    User.countDocuments({ role: 'admin', isActive: true }),
-    Section.countDocuments({ isActive: true }),
-    Subject.countDocuments({ isActive: true }),
-    Timetable.find({ status: 'published' }).sort({ semester: 1 }).lean(),
-    Timetable.countDocuments({ status: 'draft' }),
-    SwapRequest.countDocuments({ status: 'pending' }),
-    ClassSession.countDocuments({ status: 'completed', dateKey: { $gte: weekAgo, $lte: today } }),
-    ScheduleChange.countDocuments({ createdAt: { $gte: new Date(`${weekAgo}T00:00:00Z`) } }),
-    User.countDocuments({ role: 'student', isActive: true, section: null }),
+    prisma.user.count({ where: { role: 'student', isActive: true } }),
+    prisma.user.count({ where: { role: 'faculty', isActive: true } }),
+    prisma.user.count({ where: { role: 'admin', isActive: true } }),
+    prisma.section.count({ where: { isActive: true } }),
+    prisma.subject.count({ where: { isActive: true } }),
+    prisma.timetable.findMany({ where: { status: 'published' }, orderBy: { semester: 'asc' } }),
+    prisma.timetable.count({ where: { status: 'draft' } }),
+    prisma.swapRequest.count({ where: { status: 'pending' } }),
+    prisma.classSession.count({
+      where: { status: 'completed', dateKey: { gte: weekAgo, lte: today } },
+    }),
+    prisma.scheduleChange.count({ where: { createdAt: { gte: new Date(`${weekAgo}T00:00:00Z`) } } }),
+    prisma.user.count({ where: { role: 'student', isActive: true, sectionId: null } }),
     // The count alone sends an admin hunting through every semester for it —
     // naming it here is what the "Needs your attention" card shows instead.
-    Subject.find({ isActive: true, faculty: null })
-      .select('code name semester')
-      .populate('section', 'name')
-      .lean(),
+    prisma.subject.findMany({
+      where: { isActive: true, facultyId: null },
+      select: { id: true, code: true, name: true, semester: true, section: { select: { name: true } } },
+    }),
   ]);
   const subjectsNoFaculty = subjectsNoFacultyList.length;
 
   // Semesters that have cohorts but no live timetable — the gap an admin cares about.
-  const allSections = await Section.find({ isActive: true }).lean();
+  const allSections = await prisma.section.findMany({ where: { isActive: true } });
   const semestersWithSections = [...new Set(allSections.map((s) => s.semester))].sort();
   const publishedSemesters = new Set(published.map((t) => t.semester));
   const missingTimetables = semestersWithSections.filter((s) => !publishedSemesters.has(s));
@@ -157,7 +151,7 @@ export const getOverview = asyncHandler(async (_req, res) => {
         subjects,
         semesters: semestersWithSections,
         subjectsNoFaculty: subjectsNoFacultyList.map((s) => ({
-          id: String(s._id),
+          id: s.id,
           code: s.code,
           name: s.name,
           semester: s.semester,
@@ -166,7 +160,7 @@ export const getOverview = asyncHandler(async (_req, res) => {
       },
       timetables: {
         published: published.map((t) => ({
-          id: String(t._id),
+          id: t.id,
           name: t.name,
           semester: t.semester,
           entryCount: t.entryCount,
@@ -191,7 +185,7 @@ export const getOverview = asyncHandler(async (_req, res) => {
 /* ------------------------------------------------------------------ */
 
 const shapeUser = (u) => ({
-  id: String(u._id),
+  id: idOf(u),
   name: u.name,
   email: u.email,
   role: u.role,
@@ -200,7 +194,7 @@ const shapeUser = (u) => ({
   batch: u.batch || null,
   semester: u.semester || null,
   department: u.department || null,
-  section: u.section ? { id: String(u.section._id || u.section), name: u.section.name } : null,
+  section: u.section ? { id: idOf(u.section), name: u.section.name } : null,
   isActive: u.isActive,
   createdAt: u.createdAt,
 });
@@ -208,23 +202,37 @@ const shapeUser = (u) => ({
 export const listUsers = asyncHandler(async (req, res) => {
   const { role, section, semester, q, deactivatedOnly, withAttendance, below } = req.query;
 
-  const filter = {};
-  if (role) filter.role = role;
-  if (section) filter.section = section;
-  if (semester) filter.semester = Number(semester);
+  const where = {};
+  if (role) where.role = role;
+  if (section) where.sectionId = section;
+  if (semester) where.semester = Number(semester);
   // Two lists, never mixed: either everyone active, or everyone deactivated —
   // "show deactivated" means exactly that, not "active plus deactivated".
-  filter.isActive = deactivatedOnly !== 'true';
+  where.isActive = deactivatedOnly !== 'true';
   if (q) {
-    const rx = new RegExp(String(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    filter.$or = [{ name: rx }, { email: rx }, { rollNumber: rx }, { employeeId: rx }];
+    /*
+     * LIKE metacharacters, not regex ones. Prisma's `contains` builds an ILIKE
+     * pattern and escapes nothing, so an unescaped "%" would match every row
+     * and "_" any single character. The backslash is replaced first, or it
+     * would go on to escape the escapes added after it.
+     */
+    const term = String(q).replace(/[\\%_]/g, (ch) => `\\${ch}`);
+    const like = { contains: term, mode: 'insensitive' };
+    where.OR = [{ name: like }, { email: like }, { rollNumber: like }, { employeeId: like }];
   }
 
-  const users = await User.find(filter)
-    .populate('section', 'name')
-    .sort({ role: 1, rollNumber: 1, name: 1 })
-    .limit(500)
-    .lean();
+  const users = await prisma.user.findMany({
+    where,
+    include: { section: { select: { id: true, name: true } } },
+    /*
+     * Mongo sorts nulls first on an ascending sort; Postgres sorts them last.
+     * rollNumber is null for every lecturer, and with a 500-row cap that
+     * decides *which rows come back*, not merely their order — so it is said
+     * explicitly rather than left to the database's default.
+     */
+    orderBy: [{ role: 'asc' }, { rollNumber: { sort: 'asc', nulls: 'first' } }, { name: 'asc' }],
+    take: 500,
+  });
 
   /*
    * Attendance is attached only when asked for. It costs an aggregate over
@@ -237,7 +245,7 @@ export const listUsers = asyncHandler(async (req, res) => {
   }
 
   const students = users.filter((u) => u.role === 'student');
-  const overall = await getOverallForStudents(students.map((s) => s._id));
+  const overall = await getOverallForStudents(students.map(idOf));
 
   const threshold = below === undefined || below === '' ? null : Number(below);
   let data = users.map((u) => ({
@@ -265,14 +273,17 @@ export const listUsers = asyncHandler(async (req, res) => {
  * who they are, how their attendance actually stands, and what they sent in.
  */
 export const getStudentProfile = asyncHandler(async (req, res) => {
-  const student = await User.findOne({ _id: req.params.studentId, role: 'student' })
-    .populate('section', 'name')
-    .lean();
+  const student = await prisma.user.findFirst({
+    where: { id: req.params.studentId, role: 'student' },
+    include: { section: { select: { id: true, name: true } } },
+  });
   if (!student) throw ApiError.notFound('Student not found');
 
-  const [summary, documents] = await Promise.all([
-    getStudentSummary(student._id),
-    LeaveDocument.find({ student: student._id }).sort({ sentAt: -1 }).lean(),
+  const [summary, documentCount] = await Promise.all([
+    getStudentSummary(student.id),
+    // Only the count was ever used; reading every document to call .length on
+    // it was work the database can do without sending any rows back.
+    prisma.leaveDocument.count({ where: { studentId: student.id } }),
   ]);
 
   res.json({
@@ -280,38 +291,42 @@ export const getStudentProfile = asyncHandler(async (req, res) => {
     data: {
       student: shapeUser(student),
       ...summary,
-      documentCount: documents.length,
+      documentCount,
     },
   });
 });
 
 /** Faculty with their teaching load — used when assigning a subject. */
 export const listFacultyWithLoad = asyncHandler(async (_req, res) => {
-  const faculty = await User.find({ role: 'faculty', isActive: true }).sort({ name: 1 }).lean();
+  const faculty = await prisma.user.findMany({
+    where: { role: 'faculty', isActive: true },
+    orderBy: { name: 'asc' },
+  });
   /*
    * Sorted, because this list is rendered verbatim under each lecturer's
-   * name: unsorted, Mongo's natural order put the same lecturer's subjects
-   * in a different sequence on different machines, which reads as the data
-   * having changed when nothing has. Code is the label an admin scans for;
-   * section breaks the tie between two offerings sharing one code.
+   * name: unsorted, the database's natural order put the same lecturer's
+   * subjects in a different sequence on different machines, which reads as
+   * the data having changed when nothing has. Code is the label an admin
+   * scans for; section breaks the tie between two offerings sharing one code.
    */
-  const subjects = await Subject.find({ isActive: true })
-    .sort({ code: 1, section: 1 })
-    .populate('section', 'name')
-    .lean();
-  const entries = await TimetableEntry.find().lean();
+  const subjects = await prisma.subject.findMany({
+    where: { isActive: true },
+    orderBy: [{ code: 'asc' }, { sectionId: { sort: 'asc', nulls: 'first' } }],
+    include: { section: { select: { name: true } } },
+  });
+  const entries = await prisma.timetableEntry.findMany();
 
   res.json({
     success: true,
     data: faculty.map((f) => {
-      const mine = subjects.filter((s) => sameId(s.faculty, f._id));
+      const mine = subjects.filter((s) => sameId(s.facultyId, f));
       return {
-        id: String(f._id),
+        id: f.id,
         name: f.name,
         email: f.email,
         employeeId: f.employeeId,
         subjectCount: mine.length,
-        periodsPerWeek: entries.filter((e) => sameId(e.faculty, f._id)).length,
+        periodsPerWeek: entries.filter((e) => sameId(e.facultyId, f)).length,
         subjects: mine.map((s) => `${s.code} · Sec ${s.section?.name ?? '—'}`),
       };
     }),
@@ -321,45 +336,57 @@ export const listFacultyWithLoad = asyncHandler(async (_req, res) => {
 export const createUser = asyncHandler(async (req, res) => {
   const { sectionId, password, ...rest } = req.body;
 
-  if (await User.findOne({ email: rest.email })) {
+  if (await prisma.user.findUnique({ where: { email: rest.email } })) {
     throw ApiError.conflict(`${rest.email} is already registered`);
   }
 
   let section = null;
   if (rest.role === 'student') {
-    section = await Section.findById(sectionId);
+    section = sectionId ? await prisma.section.findUnique({ where: { id: sectionId } }) : null;
     if (!section) throw ApiError.badRequest('That section does not exist');
   }
 
   // A sensible default so an admin can add people without inventing passwords.
   const defaults = { student: 'student123', faculty: 'faculty123', admin: 'admin123' };
 
-  const user = await User.create({
-    ...rest,
-    password: password || defaults[rest.role],
-    section: section?._id || null,
-    semester: rest.role === 'student' ? (rest.semester ?? section.semester) : rest.semester,
+  const user = await prisma.user.create({
+    data: {
+      ...rest,
+      password: await hashPassword(password || defaults[rest.role]),
+      sectionId: section?.id || null,
+      semester: rest.role === 'student' ? (rest.semester ?? section.semester) : rest.semester,
+    },
+    include: { section: { select: { id: true, name: true } } },
   });
 
   // New students join every subject their section already runs.
   let enrolled = 0;
   if (user.role === 'student') {
-    const subjects = await Subject.find({ section: section._id, isActive: true }).select('_id').lean();
+    const subjects = await prisma.subject.findMany({
+      where: { sectionId: section.id, isActive: true },
+      select: { id: true },
+    });
     if (subjects.length) {
-      await Enrollment.insertMany(
-        subjects.map((s) => ({ student: user._id, subject: s._id })),
-        { ordered: false }
-      ).catch(() => {});
+      /*
+       * skipDuplicates rather than a swallowed error: the unordered insertMany
+       * this replaces relied on Mongo continuing past a duplicate key and threw
+       * the failure away, which also threw away every other reason it could
+       * fail. This ignores exactly the one collision that is expected.
+       */
+      await prisma.enrollment.createMany({
+        data: subjects.map((sub) => ({ studentId: user.id, subjectId: sub.id })),
+        skipDuplicates: true,
+      });
       enrolled = subjects.length;
     }
   }
 
-  await notify([user._id], {
+  await notify([user.id], {
     type: 'account:created',
     title: 'Welcome to Sitare University',
     message: `Your ${user.role} account is ready. ${password ? '' : `Temporary password: ${defaults[user.role]} — please change it.`}`,
     link: '/',
-    createdBy: req.user._id,
+    createdBy: idOf(req.user),
   });
 
   res.status(201).json({
@@ -370,39 +397,41 @@ export const createUser = asyncHandler(async (req, res) => {
 });
 
 export const updateUser = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.userId);
+  const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
   if (!user) throw ApiError.notFound('User not found');
 
   const { sectionId, password, ...rest } = req.body;
 
   if (rest.email && rest.email !== user.email) {
-    if (await User.findOne({ email: rest.email, _id: { $ne: user._id } })) {
-      throw ApiError.conflict(`${rest.email} is already registered`);
-    }
+    const taken = await prisma.user.findFirst({
+      where: { email: rest.email, id: { not: user.id } },
+    });
+    if (taken) throw ApiError.conflict(`${rest.email} is already registered`);
   }
 
   // Guard against locking everyone out of administration.
   if (rest.isActive === false && user.role === 'admin') {
-    const others = await User.countDocuments({
-      role: 'admin',
-      isActive: true,
-      _id: { $ne: user._id },
+    const others = await prisma.user.count({
+      where: { role: 'admin', isActive: true, id: { not: user.id } },
     });
     if (others === 0) throw ApiError.badRequest('This is the last active admin account');
   }
 
-  Object.assign(user, rest);
-  if (sectionId !== undefined) user.section = sectionId || null;
-  if (password) user.password = password;
-  await user.save();
+  const data = { ...rest };
+  if (sectionId !== undefined) data.sectionId = sectionId || null;
+  if (password) data.password = await hashPassword(password);
 
-  const fresh = await User.findById(user._id).populate('section', 'name').lean();
-  res.json({ success: true, message: `${user.name} updated`, data: shapeUser(fresh) });
+  const fresh = await prisma.user.update({
+    where: { id: user.id },
+    data,
+    include: { section: { select: { id: true, name: true } } },
+  });
+  res.json({ success: true, message: `${fresh.name} updated`, data: shapeUser(fresh) });
 });
 
 /** Suspend or restore access without removing anything. */
 export const setUserStatus = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.userId);
+  const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
   if (!user) throw ApiError.notFound('User not found');
 
   const active = Boolean(req.body?.isActive);
@@ -410,20 +439,20 @@ export const setUserStatus = asyncHandler(async (req, res) => {
   // The only refusal left: locking the last admin out is unrecoverable —
   // nobody would be able to sign in and undo it, including whoever did it.
   if (!active && user.role === 'admin') {
-    const others = await User.countDocuments({
-      role: 'admin',
-      isActive: true,
-      _id: { $ne: user._id },
+    const others = await prisma.user.count({
+      where: { role: 'admin', isActive: true, id: { not: user.id } },
     });
     if (others === 0) throw ApiError.badRequest('This is the last active admin account');
   }
 
-  user.isActive = active;
-  await user.save();
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { isActive: active },
+  });
   res.json({
     success: true,
-    message: `${user.name} ${active ? 'reactivated' : 'deactivated'}`,
-    data: { id: String(user._id), isActive: user.isActive },
+    message: `${updated.name} ${active ? 'reactivated' : 'deactivated'}`,
+    data: { id: updated.id, isActive: updated.isActive },
   });
 });
 
@@ -433,11 +462,11 @@ export const setUserStatus = asyncHandler(async (req, res) => {
  * unassigned so they can be handed to somebody else.
  */
 export const deleteUser = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.userId);
+  const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
   if (!user) throw ApiError.notFound('User not found');
 
   if (user.role === 'admin') {
-    const others = await User.countDocuments({ role: 'admin', _id: { $ne: user._id } });
+    const others = await prisma.user.count({ where: { role: 'admin', id: { not: user.id } } });
     if (others === 0) {
       throw ApiError.badRequest(
         'This is the only admin account — deleting it would leave nobody able to administer the system'
@@ -446,7 +475,7 @@ export const deleteUser = asyncHandler(async (req, res) => {
   }
 
   const { name, role } = user;
-  const counts = await purgeUsers([user._id]);
+  const counts = await purgeUsers([user.id]);
   const detail = describePurge({ ...counts, users: 0 });
 
   res.json({
@@ -489,7 +518,9 @@ export const importStudents = asyncHandler(async (req, res) => {
 
   if (!records.length) throw ApiError.badRequest('No student rows could be read');
 
-  const sections = await Section.find({ isActive: true, semester: Number(semester) }).lean();
+  const sections = await prisma.section.findMany({
+    where: { isActive: true, semester: Number(semester) },
+  });
   const byName = new Map(sections.map((s) => [s.name.toUpperCase(), s]));
   if (!sections.length) {
     throw ApiError.badRequest(`No sections exist for semester ${semester}`);
@@ -502,7 +533,7 @@ export const importStudents = asyncHandler(async (req, res) => {
    * email — and any other column it happens to carry is simply ignored.
    */
   const fixedSection = req.body.sectionId
-    ? sections.find((s) => sameId(s._id, req.body.sectionId))
+    ? sections.find((s) => sameId(s, req.body.sectionId))
     : null;
   if (req.body.sectionId && !fixedSection) {
     throw ApiError.badRequest('That section does not belong to the chosen semester');
@@ -554,14 +585,15 @@ export const importStudents = asyncHandler(async (req, res) => {
   }
 
   // Anyone already on the system is skipped too, not duplicated.
-  const clashes = await User.find({
-    $or: [
-      { email: { $in: rows.map((r) => r.email) } },
-      { rollNumber: { $in: rows.map((r) => r.rollNumber) } },
-    ],
-  })
-    .select('email rollNumber')
-    .lean();
+  const clashes = await prisma.user.findMany({
+    where: {
+      OR: [
+        { email: { in: rows.map((r) => r.email) } },
+        { rollNumber: { in: rows.map((r) => r.rollNumber) } },
+      ],
+    },
+    select: { email: true, rollNumber: true },
+  });
 
   const takenEmail = new Set(clashes.map((c) => c.email));
   const takenRoll = new Set(clashes.map((c) => c.rollNumber));
@@ -596,29 +628,48 @@ export const importStudents = asyncHandler(async (req, res) => {
     });
   }
 
+  /*
+   * Hashed once for the whole file. bcrypt is deliberately slow, and every row
+   * gets the same default password, so hashing per student would make a
+   * hundred-row import take a hundred times longer for an identical result.
+   */
+  const defaultPassword = await hashPassword('student123');
+
+  /* Which subjects a section runs does not change while the file is read. */
+  const subjectsBySection = new Map();
+  const subjectsFor = async (sectionId) => {
+    if (!subjectsBySection.has(sectionId)) {
+      subjectsBySection.set(
+        sectionId,
+        await prisma.subject.findMany({ where: { sectionId, isActive: true }, select: { id: true } })
+      );
+    }
+    return subjectsBySection.get(sectionId);
+  };
+
   const created = [];
   for (const r of importable) {
-    const user = await User.create({
-      name: r.name,
-      email: r.email,
-      password: 'student123',
-      role: 'student',
-      rollNumber: r.rollNumber,
-      batch: r.batch || undefined,
-      semester: Number(semester),
-      section: r.section._id,
-      department: r.section.department,
+    const user = await prisma.user.create({
+      data: {
+        name: r.name,
+        email: r.email,
+        password: defaultPassword,
+        role: 'student',
+        rollNumber: r.rollNumber,
+        batch: r.batch || null,
+        semester: Number(semester),
+        sectionId: r.section.id,
+        department: r.section.department,
+      },
     });
     created.push(user);
 
-    const subjects = await Subject.find({ section: r.section._id, isActive: true })
-      .select('_id')
-      .lean();
+    const subjects = await subjectsFor(r.section.id);
     if (subjects.length) {
-      await Enrollment.insertMany(
-        subjects.map((s) => ({ student: user._id, subject: s._id })),
-        { ordered: false }
-      ).catch(() => {});
+      await prisma.enrollment.createMany({
+        data: subjects.map((sub) => ({ studentId: user.id, subjectId: sub.id })),
+        skipDuplicates: true,
+      });
     }
   }
 
@@ -636,26 +687,28 @@ export const importStudents = asyncHandler(async (req, res) => {
 /* ------------------------------------------------------------------ */
 
 export const listSections = asyncHandler(async (_req, res) => {
-  const sections = await Section.find().sort({ semester: 1, name: 1 }).lean();
-  const ids = sections.map((s) => s._id);
+  const sections = await prisma.section.findMany({ orderBy: [{ semester: 'asc' }, { name: 'asc' }] });
+  const ids = sections.map(idOf);
 
   const [studentRows, subjectRows] = await Promise.all([
-    User.aggregate([
-      { $match: { role: 'student', isActive: true, section: { $in: ids } } },
-      { $group: { _id: '$section', n: { $sum: 1 } } },
-    ]),
-    Subject.aggregate([
-      { $match: { isActive: true, section: { $in: ids } } },
-      { $group: { _id: '$section', n: { $sum: 1 } } },
-    ]),
+    prisma.user.groupBy({
+      by: ['sectionId'],
+      where: { role: 'student', isActive: true, sectionId: { in: ids } },
+      _count: { _all: true },
+    }),
+    prisma.subject.groupBy({
+      by: ['sectionId'],
+      where: { isActive: true, sectionId: { in: ids } },
+      _count: { _all: true },
+    }),
   ]);
-  const students = Object.fromEntries(studentRows.map((r) => [idOf(r), r.n]));
-  const subjects = Object.fromEntries(subjectRows.map((r) => [idOf(r), r.n]));
+  const students = Object.fromEntries(studentRows.map((r) => [r.sectionId, r._count._all]));
+  const subjects = Object.fromEntries(subjectRows.map((r) => [r.sectionId, r._count._all]));
 
   res.json({
     success: true,
     data: sections.map((s) => ({
-      id: String(s._id),
+      id: s.id,
       name: s.name,
       label: sectionLabel(s),
       semester: s.semester,
@@ -681,9 +734,10 @@ export const createSection = asyncHandler(async (req, res) => {
   const names = [...new Set(raw.split(',').map((n) => n.trim().toUpperCase()).filter(Boolean))];
 
   if (names.length > 1) {
-    const conflicts = await Section.find({ name: { $in: names }, semester, department })
-      .select('name')
-      .lean();
+    const conflicts = await prisma.section.findMany({
+      where: { name: { in: names }, semester, department },
+      select: { name: true },
+    });
     if (conflicts.length) {
       const list = conflicts.map((c) => c.name).join(', ');
       throw ApiError.conflict(
@@ -691,16 +745,28 @@ export const createSection = asyncHandler(async (req, res) => {
       );
     }
 
-    const created = await Section.insertMany(names.map((name) => ({ name, semester, department })));
+    /*
+     * createMany returns only a count, and the response names what it made, so
+     * the rows are read back. A transaction of creates would return them
+     * directly but would also roll the whole set back over one collision —
+     * which the check above has already ruled out.
+     */
+    await prisma.section.createMany({ data: names.map((name) => ({ name, semester, department })) });
+    const created = await prisma.section.findMany({
+      where: { name: { in: names }, semester, department },
+      orderBy: { name: 'asc' },
+    });
     return res.status(201).json({
       success: true,
       message: `${created.map((s) => sectionLabel(s)).join(', ')} created for semester ${semester}`,
-      data: created.map((s) => ({ id: String(s._id), name: s.name, semester: s.semester })),
+      data: created.map((s) => ({ id: s.id, name: s.name, semester: s.semester })),
     });
   }
 
   const name = names[0] || '';
-  const exists = await Section.findOne({ name, semester, department });
+  const exists = await prisma.section.findUnique({
+    where: { name_semester_department: { name, semester, department } },
+  });
   if (exists) {
     throw ApiError.conflict(
       name
@@ -709,11 +775,11 @@ export const createSection = asyncHandler(async (req, res) => {
     );
   }
 
-  const section = await Section.create({ name, semester, department });
+  const section = await prisma.section.create({ data: { name, semester, department } });
   res.status(201).json({
     success: true,
     message: `${sectionLabel(section)} created for semester ${semester}`,
-    data: { id: String(section._id), name: section.name, semester: section.semester },
+    data: { id: section.id, name: section.name, semester: section.semester },
   });
 });
 
@@ -726,7 +792,7 @@ export const createSection = asyncHandler(async (req, res) => {
  * section and break every lookup that scopes by semester.
  */
 export const updateSection = asyncHandler(async (req, res) => {
-  const section = await Section.findById(req.params.sectionId);
+  const section = await prisma.section.findUnique({ where: { id: req.params.sectionId } });
   if (!section) throw ApiError.notFound('Section not found');
 
   // An explicit empty name clears it, turning the cohort into the whole year.
@@ -735,11 +801,8 @@ export const updateSection = asyncHandler(async (req, res) => {
   const semester = req.body.semester ?? section.semester;
   const department = req.body.department?.trim() || section.department;
 
-  const clash = await Section.findOne({
-    name,
-    semester,
-    department,
-    _id: { $ne: section._id },
+  const clash = await prisma.section.findFirst({
+    where: { name, semester, department, id: { not: section.id } },
   });
   if (clash) {
     throw ApiError.conflict(
@@ -752,19 +815,25 @@ export const updateSection = asyncHandler(async (req, res) => {
   const movedSemester = semester !== section.semester;
   const previous = { label: sectionLabel(section), semester: section.semester };
 
-  section.name = name;
-  section.semester = semester;
-  section.department = department;
-  await section.save();
+  const updated = await prisma.section.update({
+    where: { id: section.id },
+    data: { name, semester, department },
+  });
 
   const moved = { subjects: 0, students: 0 };
   if (movedSemester) {
     moved.subjects = (
-      await Subject.updateMany({ section: section._id }, { $set: { semester, department } })
-    ).modifiedCount;
+      await prisma.subject.updateMany({
+        where: { sectionId: section.id },
+        data: { semester, department },
+      })
+    ).count;
     moved.students = (
-      await User.updateMany({ role: 'student', section: section._id }, { $set: { semester } })
-    ).modifiedCount;
+      await prisma.user.updateMany({
+        where: { role: 'student', sectionId: section.id },
+        data: { semester },
+      })
+    ).count;
   }
 
   const detail = movedSemester
@@ -777,14 +846,14 @@ export const updateSection = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: `${previous.label} updated to ${sectionLabel(section)}${detail}`,
-    data: { id: String(section._id), name, semester, department, moved },
+    message: `${previous.label} updated to ${sectionLabel(updated)}${detail}`,
+    data: { id: updated.id, name, semester, department, moved },
   });
 });
 
 /** Deletes the cohort outright, along with everything that belonged to it. */
 export const deleteSection = asyncHandler(async (req, res) => {
-  const section = await Section.findById(req.params.sectionId);
+  const section = await prisma.section.findUnique({ where: { id: req.params.sectionId } });
   if (!section) throw ApiError.notFound('Section not found');
 
   const label = sectionLabel(section);
@@ -803,17 +872,20 @@ export const deleteSection = asyncHandler(async (req, res) => {
 /* ------------------------------------------------------------------ */
 
 export const listSubjectsAdmin = asyncHandler(async (req, res) => {
-  const filter = {};
-  if (req.query.semester) filter.semester = Number(req.query.semester);
-  if (req.query.section) filter.section = req.query.section;
+  const where = {};
+  if (req.query.semester) where.semester = Number(req.query.semester);
+  if (req.query.section) where.sectionId = req.query.section;
 
-  const subjects = await Subject.find(filter)
-    .populate('faculty', 'name email')
-    .populate('section', 'name semester')
-    .sort({ semester: 1, code: 1 })
-    .lean();
+  const subjects = await prisma.subject.findMany({
+    where,
+    include: {
+      faculty: { select: { id: true, name: true, email: true } },
+      section: { select: { id: true, name: true, semester: true } },
+    },
+    orderBy: [{ semester: 'asc' }, { code: 'asc' }],
+  });
 
-  const ids = subjects.map((s) => s._id);
+  const ids = subjects.map(idOf);
   const semesters = [...new Set(subjects.map((s) => s.semester))];
 
   /*
@@ -827,42 +899,42 @@ export const listSubjectsAdmin = asyncHandler(async (req, res) => {
    * Scoped to the live published grid only: a draft or archived version's
    * overrides say nothing about who teaches the subject today.
    */
-  const publishedTimetables = await Timetable.find({
-    semester: { $in: semesters },
-    status: 'published',
-  })
-    .select('_id')
-    .lean();
-  const publishedIds = publishedTimetables.map((t) => t._id);
+  const publishedTimetables = await prisma.timetable.findMany({
+    where: { semester: { in: semesters }, status: 'published' },
+    select: { id: true },
+  });
+  const publishedIds = publishedTimetables.map(idOf);
 
   const [enrolRows, sessionRows, entryFacultyRows] = await Promise.all([
-    Enrollment.aggregate([
-      { $match: { subject: { $in: ids }, isActive: true } },
-      { $group: { _id: '$subject', n: { $sum: 1 } } },
-    ]),
-    ClassSession.aggregate([
-      { $match: { subject: { $in: ids }, status: 'completed' } },
-      { $group: { _id: '$subject', n: { $sum: 1 } } },
-    ]),
+    prisma.enrollment.groupBy({
+      by: ['subjectId'],
+      where: { subjectId: { in: ids }, isActive: true },
+      _count: { _all: true },
+    }),
+    prisma.classSession.groupBy({
+      by: ['subjectId'],
+      where: { subjectId: { in: ids }, status: 'completed' },
+      _count: { _all: true },
+    }),
     publishedIds.length
-      ? TimetableEntry.find({
-          subject: { $in: ids },
-          timetable: { $in: publishedIds },
-          faculty: { $ne: null },
+      ? prisma.timetableEntry.findMany({
+          where: {
+            subjectId: { in: ids },
+            timetableId: { in: publishedIds },
+            facultyId: { not: null },
+          },
+          select: { subjectId: true, faculty: { select: { id: true, name: true } } },
         })
-          .select('subject faculty')
-          .populate('faculty', 'name')
-          .lean()
       : [],
   ]);
-  const enrolled = Object.fromEntries(enrolRows.map((r) => [idOf(r), r.n]));
-  const conducted = Object.fromEntries(sessionRows.map((r) => [idOf(r), r.n]));
+  const enrolled = Object.fromEntries(enrolRows.map((r) => [r.subjectId, r._count._all]));
+  const conducted = Object.fromEntries(sessionRows.map((r) => [r.subjectId, r._count._all]));
 
   // subjectId -> Map(facultyId -> name), built from actual per-period overrides.
   const coveringFaculty = new Map();
   for (const row of entryFacultyRows) {
     if (!row.faculty) continue;
-    const sid = idOf(row.subject);
+    const sid = row.subjectId;
     if (!coveringFaculty.has(sid)) coveringFaculty.set(sid, new Map());
     coveringFaculty.get(sid).set(idOf(row.faculty), row.faculty.name);
   }
@@ -887,8 +959,8 @@ export const listSubjectsAdmin = asyncHandler(async (req, res) => {
         plannedClasses: s.plannedClasses,
         minAttendance: s.minAttendance,
         isActive: s.isActive,
-        section: s.section ? { id: String(s.section._id), name: s.section.name } : null,
-        faculty: s.faculty ? { id: String(s.faculty._id), name: s.faculty.name } : null,
+        section: s.section ? { id: s.section.id, name: s.section.name } : null,
+        faculty: s.faculty ? { id: s.faculty.id, name: s.faculty.name } : null,
         // Ready-to-display label — "Mr Ankit Mehta" when only one person
         // teaches it, "Mr Ankit Mehta/Dr Anuja Agarwal" when more than one
         // actually does, null when the subject has no lecturer at all.
@@ -904,8 +976,8 @@ export const createSubject = asyncHandler(async (req, res) => {
   const { code, name, semester, sectionId, facultyId, enrolAllInSection, ...rest } = req.body;
 
   const [section, faculty] = await Promise.all([
-    Section.findById(sectionId),
-    User.findById(facultyId),
+    sectionId ? prisma.section.findUnique({ where: { id: sectionId } }) : null,
+    facultyId ? prisma.user.findUnique({ where: { id: facultyId } }) : null,
   ]);
   if (!section) throw ApiError.badRequest('That section does not exist');
   if (!faculty || faculty.role !== 'faculty') throw ApiError.badRequest('Choose a faculty member');
@@ -915,96 +987,103 @@ export const createSubject = asyncHandler(async (req, res) => {
     );
   }
 
-  const clash = await Subject.findOne({ code: code.toUpperCase(), section: section._id });
+  const clash = await prisma.subject.findFirst({
+    where: { code: code.toUpperCase(), sectionId: section.id },
+  });
   if (clash) {
     throw ApiError.conflict(`${code.toUpperCase()} already exists for section ${section.name}`);
   }
 
-  const subject = await Subject.create({
-    ...rest,
-    code,
-    name,
-    semester,
-    section: section._id,
-    faculty: faculty._id,
-    department: section.department,
+  const subject = await prisma.subject.create({
+    data: {
+      ...rest,
+      // Uppercased here as well as by the database CHECK: the constraint makes
+      // a miss loud, this makes there be nothing to miss.
+      code: code.toUpperCase(),
+      name,
+      semester,
+      sectionId: section.id,
+      facultyId: faculty.id,
+      department: section.department,
+    },
   });
 
   let enrolled = 0;
   if (enrolAllInSection) {
-    const students = await User.find({ role: 'student', section: section._id, isActive: true })
-      .select('_id')
-      .lean();
+    const students = await prisma.user.findMany({
+      where: { role: 'student', sectionId: section.id, isActive: true },
+      select: { id: true },
+    });
     if (students.length) {
-      await Enrollment.insertMany(
-        students.map((s) => ({ student: s._id, subject: subject._id })),
-        { ordered: false }
-      ).catch(() => {});
+      await prisma.enrollment.createMany({
+        data: students.map((st) => ({ studentId: st.id, subjectId: subject.id })),
+        skipDuplicates: true,
+      });
       enrolled = students.length;
     }
   }
 
-  await notify([faculty._id], {
+  await notify([faculty.id], {
     type: 'subject:assigned',
     title: 'Subject assigned to you',
     message: `You now teach ${subject.code} ${subject.name} for Section ${section.name}.`,
     link: '/',
-    createdBy: req.user._id,
+    createdBy: idOf(req.user),
   });
 
   res.status(201).json({
     success: true,
     message: `${subject.code} created${enrolled ? ` with ${enrolled} students enrolled` : ''}`,
-    data: { id: String(subject._id), code: subject.code, enrolled },
+    data: { id: subject.id, code: subject.code, enrolled },
   });
 });
 
 export const updateSubject = asyncHandler(async (req, res) => {
-  const subject = await Subject.findById(req.params.subjectId);
+  const subject = await prisma.subject.findUnique({ where: { id: req.params.subjectId } });
   if (!subject) throw ApiError.notFound('Subject not found');
 
   const { facultyId, ...rest } = req.body;
-  // A departing lecturer leaves a subject with faculty: null (see purgeUsers) —
+  // A departing lecturer leaves a subject with no faculty (see purgeUsers) —
   // that is not a real id, so it must never be cast into a query filter below.
-  const previous = subject.faculty ? String(subject.faculty) : null;
+  const previous = subject.facultyId || null;
+  const data = { ...rest };
 
   if (facultyId && facultyId !== previous) {
-    const faculty = await User.findById(facultyId);
+    const faculty = await prisma.user.findUnique({ where: { id: facultyId } });
     if (!faculty || faculty.role !== 'faculty') throw ApiError.badRequest('Choose a faculty member');
-    subject.faculty = faculty._id;
+    data.facultyId = faculty.id;
 
     // The timetable stores the lecturer per period; keep it in step, but leave
     // any period deliberately overridden to somebody else alone. Nothing to
     // reconcile if the subject had no previous lecturer to begin with.
     if (previous) {
-      await TimetableEntry.updateMany(
-        { subject: subject._id, faculty: previous },
-        { $set: { faculty: faculty._id } }
-      );
+      await prisma.timetableEntry.updateMany({
+        where: { subjectId: subject.id, facultyId: previous },
+        data: { facultyId: faculty.id },
+      });
     }
 
-    await notify([faculty._id], {
+    await notify([faculty.id], {
       type: 'subject:assigned',
       title: 'Subject assigned to you',
       message: `You now teach ${subject.code} ${subject.name}.`,
       link: '/',
-      createdBy: req.user._id,
+      createdBy: idOf(req.user),
     });
   }
 
-  Object.assign(subject, rest);
-  await subject.save();
+  const updated = await prisma.subject.update({ where: { id: subject.id }, data });
 
-  res.json({ success: true, message: `${subject.code} updated`, data: { id: String(subject._id) } });
+  res.json({ success: true, message: `${updated.code} updated`, data: { id: updated.id } });
 });
 
 /** Deletes the subject and its register, however much history it holds. */
 export const deleteSubject = asyncHandler(async (req, res) => {
-  const subject = await Subject.findById(req.params.subjectId);
+  const subject = await prisma.subject.findUnique({ where: { id: req.params.subjectId } });
   if (!subject) throw ApiError.notFound('Subject not found');
 
   const code = subject.code;
-  const counts = await purgeSubjects([subject._id]);
+  const counts = await purgeSubjects([subject.id]);
   const detail = describePurge(counts);
 
   res.json({
@@ -1019,42 +1098,54 @@ export const deleteSubject = asyncHandler(async (req, res) => {
 /* ------------------------------------------------------------------ */
 
 export const getSubjectRosterAdmin = asyncHandler(async (req, res) => {
-  const subject = await Subject.findById(req.params.subjectId).populate('section', 'name semester');
+  const subject = await prisma.subject.findUnique({
+    where: { id: req.params.subjectId },
+    include: { section: { select: { id: true, name: true, semester: true } } },
+  });
   if (!subject) throw ApiError.notFound('Subject not found');
 
   const [enrolments, sectionStudents] = await Promise.all([
-    Enrollment.find({ subject: subject._id, isActive: true })
-      .populate('student', 'name rollNumber email')
-      .lean(),
-    User.find({ role: 'student', section: subject.section?._id, isActive: true })
-      .select('name rollNumber email')
-      .sort({ rollNumber: 1 })
-      .lean(),
+    prisma.enrollment.findMany({
+      where: { subjectId: subject.id, isActive: true },
+      include: { student: { select: { id: true, name: true, rollNumber: true, email: true } } },
+    }),
+    /*
+     * A subject with no section belongs to the whole year and has no roster to
+     * offer here. Asking for `sectionId: undefined` would drop the clause and
+     * return every student in the institute, so the empty answer is explicit.
+     */
+    subject.sectionId
+      ? prisma.user.findMany({
+          where: { role: 'student', sectionId: subject.sectionId, isActive: true },
+          select: { id: true, name: true, rollNumber: true, email: true },
+          orderBy: { rollNumber: { sort: 'asc', nulls: 'first' } },
+        })
+      : [],
   ]);
 
-  const enrolledIds = new Set(enrolments.map((e) => idOf(e.student)));
+  const enrolledIds = new Set(enrolments.map((e) => e.studentId));
 
   res.json({
     success: true,
     data: {
-      subject: { id: String(subject._id), code: subject.code, name: subject.name },
+      subject: { id: subject.id, code: subject.code, name: subject.name },
       enrolled: enrolments
         .filter((e) => e.student)
         .map((e) => ({
-          id: String(e.student._id),
+          id: e.student.id,
           name: e.student.name,
           rollNumber: e.student.rollNumber,
         }))
         .sort((a, b) => (a.rollNumber || '').localeCompare(b.rollNumber || '')),
       available: sectionStudents
-        .filter((s) => !enrolledIds.has(idOf(s)))
-        .map((s) => ({ id: String(s._id), name: s.name, rollNumber: s.rollNumber })),
+        .filter((st) => !enrolledIds.has(st.id))
+        .map((st) => ({ id: st.id, name: st.name, rollNumber: st.rollNumber })),
     },
   });
 });
 
 export const setEnrolment = asyncHandler(async (req, res) => {
-  const subject = await Subject.findById(req.params.subjectId);
+  const subject = await prisma.subject.findUnique({ where: { id: req.params.subjectId } });
   if (!subject) throw ApiError.notFound('Subject not found');
 
   const { studentIds, action } = req.body || {};
@@ -1063,14 +1154,16 @@ export const setEnrolment = asyncHandler(async (req, res) => {
   }
 
   if (action === 'remove') {
-    await Enrollment.deleteMany({ subject: subject._id, student: { $in: studentIds } });
+    await prisma.enrollment.deleteMany({
+      where: { subjectId: subject.id, studentId: { in: studentIds } },
+    });
     return res.json({ success: true, message: `${studentIds.length} students removed` });
   }
 
-  await Enrollment.insertMany(
-    studentIds.map((student) => ({ student, subject: subject._id })),
-    { ordered: false }
-  ).catch(() => {});
+  await prisma.enrollment.createMany({
+    data: studentIds.map((studentId) => ({ studentId, subjectId: subject.id })),
+    skipDuplicates: true,
+  });
 
   res.json({ success: true, message: `${studentIds.length} students enrolled` });
 });

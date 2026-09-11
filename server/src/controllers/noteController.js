@@ -299,7 +299,10 @@ export const deleteNote = asyncHandler(async (req, res) => {
 
   await deleteFiles((note.attachments || []).map((a) => a.fileId));
   // Nobody should keep being pointed at material that is gone.
-  await withdrawNotifications({ type: 'note:published', 'meta.noteId': String(note._id) });
+  await withdrawNotifications({
+    type: 'note:published',
+    meta: { path: ['noteId'], equals: idOf(note) },
+  });
   await note.deleteOne();
 
   res.json({ success: true, message: 'Notes removed', data: { id: String(note._id) } });

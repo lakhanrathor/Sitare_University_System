@@ -291,6 +291,23 @@ async function collect() {
     console.error('  Fix the canonicaliser before trusting this baseline.\n');
   }
 
+  /*
+   * The other half of the same problem, and the more dangerous half: a value
+   * that is not an id at all because something coerced a missing one. A field
+   * holding the *string* "undefined" or "[object Object]" is always a bug —
+   * String(user._id) against a row that carries `id`, or a template literal
+   * built from an absent reference — and it is invisible to every status-code
+   * check, since the response is a perfectly valid 200. This harness caught
+   * exactly that: every user in /admin/users came back with id "undefined"
+   * while all twenty security checks still passed.
+   */
+  const ARTEFACT = /"(undefined|\[object Object\])"/g;
+  const artefacts = [...JSON.stringify(snapshot).matchAll(ARTEFACT)];
+  if (artefacts.length) {
+    console.error(`\n  ${artefacts.length} coerced-nothing value(s) in the snapshot: ${artefacts[0][1]}`);
+    console.error('  Something read a field that does not exist on this shape.\n');
+  }
+
   return snapshot;
 }
 

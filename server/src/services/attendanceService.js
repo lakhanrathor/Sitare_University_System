@@ -1,18 +1,14 @@
-import mongoose from 'mongoose';
-import Enrollment from '../models/Enrollment.js';
-import ClassSession from '../models/ClassSession.js';
-import Attendance, { PRESENT_STATUSES } from '../models/Attendance.js';
+import { prisma } from '../config/prisma.js';
+import { PRESENT_STATUSES } from '../config/attendance.js';
 import { idOf } from '../utils/ids.js';
-
-const oid = (id) => new mongoose.Types.ObjectId(String(id));
 
 /**
  * THE RULE, in one place:
  *
  *   percentage = presentClasses / conductedClasses * 100
  *
- * `conductedClasses` is the number of ClassSession documents with
- * status 'completed' for that subject — i.e. classes that actually happened.
+ * `conductedClasses` is the number of ClassSession rows with status
+ * 'completed' for that subject — i.e. classes that actually happened.
  * `subject.plannedClasses` (30 for a semester) is NEVER the denominator.
  *
  * 30 planned, 2 conducted, 2 attended  =>  100%   (not 6.7%)
@@ -28,86 +24,81 @@ export function computePercentage(present, conducted) {
 /** conducted-class count per subject: { [subjectId]: count } */
 export async function getConductedCounts(subjectIds) {
   if (!subjectIds.length) return {};
-  const rows = await ClassSession.aggregate([
-    { $match: { subject: { $in: subjectIds.map(oid) }, status: 'completed' } },
-    { $group: { _id: '$subject', conducted: { $sum: 1 } } },
-  ]);
-  return Object.fromEntries(rows.map((r) => [idOf(r), r.conducted]));
+  const rows = await prisma.classSession.groupBy({
+    by: ['subjectId'],
+    where: { subjectId: { in: subjectIds }, status: 'completed' },
+    _count: { _all: true },
+  });
+  return Object.fromEntries(rows.map((r) => [r.subjectId, r._count._all]));
 }
 
 /**
  * Per-subject attended counts for one student.
- * Joins each record back to its session so records belonging to a cancelled
- * class can never inflate the numerator.
+ *
+ * The `session` clause is the load-bearing part: without it a record left
+ * behind by a class that was later cancelled would still count toward the
+ * numerator, and a student could read above 100%.
  */
 async function getStudentSubjectTallies(studentId, subjectIds) {
   if (!subjectIds.length) return {};
-  const rows = await Attendance.aggregate([
-    { $match: { student: oid(studentId), subject: { $in: subjectIds.map(oid) } } },
-    {
-      $lookup: {
-        from: 'classsessions',
-        localField: 'session',
-        foreignField: '_id',
-        as: 'sess',
-        pipeline: [{ $match: { status: 'completed' } }, { $project: { _id: 1 } }],
-      },
+  const rows = await prisma.attendance.groupBy({
+    by: ['subjectId'],
+    where: {
+      studentId,
+      subjectId: { in: subjectIds },
+      status: { in: PRESENT_STATUSES },
+      session: { status: 'completed' },
     },
-    { $match: { 'sess.0': { $exists: true } } },
-    {
-      $group: {
-        _id: '$subject',
-        present: { $sum: { $cond: [{ $in: ['$status', PRESENT_STATUSES] }, 1, 0] } },
-        markedAbsent: { $sum: { $cond: [{ $eq: ['$status', 'absent'] }, 1, 0] } },
-      },
-    },
-  ]);
-  return Object.fromEntries(rows.map((r) => [idOf(r), r]));
+    _count: { _all: true },
+  });
+  return Object.fromEntries(rows.map((r) => [r.subjectId, { present: r._count._all }]));
 }
 
 /**
  * Overall attendance for many students in one pass.
  *
  * Built for the shortage list: finding the fifteen students below the
- * requirement out of two hundred and forty must not mean two hundred and
- * forty round trips. Marking a register writes a row for every enrolled
- * student, so counting a student's rows against completed sessions gives the
- * same denominator the per-subject view uses — the classes actually held while
- * they were enrolled.
+ * requirement out of two hundred and forty must not mean two hundred and forty
+ * round trips.
+ *
+ * Read the denominator carefully. It counts *this student's* attendance rows
+ * against completed sessions, which is not the same number as the per-subject
+ * view uses — that one counts every completed session of the subject, whether
+ * or not the student has a row for it. The two agree for a student enrolled
+ * from the start and diverge for one who joined mid-semester, who reads lower
+ * there and higher here. In SQL the two look close enough to be one query with
+ * a different WHERE, and merging them would quietly change the admin shortage
+ * list. They are separate on purpose.
  */
 export async function getOverallForStudents(studentIds) {
   if (!studentIds?.length) return {};
-  const rows = await Attendance.aggregate([
-    { $match: { student: { $in: studentIds.map(oid) } } },
-    {
-      $lookup: {
-        from: 'classsessions',
-        localField: 'session',
-        foreignField: '_id',
-        as: 'sess',
-        pipeline: [{ $match: { status: 'completed' } }, { $project: { _id: 1 } }],
-      },
-    },
-    { $match: { 'sess.0': { $exists: true } } },
-    {
-      $group: {
-        _id: '$student',
-        conducted: { $sum: 1 },
-        present: { $sum: { $cond: [{ $in: ['$status', PRESENT_STATUSES] }, 1, 0] } },
-      },
-    },
+
+  const where = { studentId: { in: studentIds }, session: { status: 'completed' } };
+  const [totals, presents] = await Promise.all([
+    prisma.attendance.groupBy({ by: ['studentId'], where, _count: { _all: true } }),
+    prisma.attendance.groupBy({
+      by: ['studentId'],
+      where: { ...where, status: { in: PRESENT_STATUSES } },
+      _count: { _all: true },
+    }),
   ]);
 
+  const presentByStudent = Object.fromEntries(presents.map((r) => [r.studentId, r._count._all]));
+
   return Object.fromEntries(
-    rows.map((r) => [
-      idOf(r),
-      {
-        conducted: r.conducted,
-        present: r.present,
-        absent: Math.max(r.conducted - r.present, 0),
-        percentage: computePercentage(r.present, r.conducted),
-      },
-    ])
+    totals.map((r) => {
+      const conducted = r._count._all;
+      const present = presentByStudent[r.studentId] || 0;
+      return [
+        r.studentId,
+        {
+          conducted,
+          present,
+          absent: Math.max(conducted - present, 0),
+          percentage: computePercentage(present, conducted),
+        },
+      ];
+    })
   );
 }
 
@@ -116,16 +107,27 @@ export async function getOverallForStudents(studentIds) {
  * class-weighted overall figure.
  */
 export async function getStudentSummary(studentId) {
-  const enrollments = await Enrollment.find({ student: studentId, isActive: true })
-    .populate({
-      path: 'subject',
-      select: 'code name semester credits plannedClasses minAttendance faculty isActive',
-      populate: { path: 'faculty', select: 'name email' },
-    })
-    .lean();
+  const enrollments = await prisma.enrollment.findMany({
+    where: { studentId, isActive: true },
+    include: {
+      subject: {
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          semester: true,
+          credits: true,
+          plannedClasses: true,
+          minAttendance: true,
+          isActive: true,
+          faculty: { select: { name: true, email: true } },
+        },
+      },
+    },
+  });
 
   const subjects = enrollments.map((e) => e.subject).filter((s) => s && s.isActive !== false);
-  const subjectIds = subjects.map((s) => s._id);
+  const subjectIds = subjects.map(idOf);
 
   const [conductedMap, tallyMap] = await Promise.all([
     getConductedCounts(subjectIds),
@@ -135,7 +137,7 @@ export async function getStudentSummary(studentId) {
   const bySubject = subjects.map((s) => {
     const key = idOf(s);
     const conducted = conductedMap[key] || 0;
-    const tally = tallyMap[key] || { present: 0, markedAbsent: 0 };
+    const tally = tallyMap[key] || { present: 0 };
     const present = tally.present;
     // Any conducted class without a present record counts against the student,
     // so present + absent always reconciles with conducted.
@@ -192,21 +194,21 @@ export function attendanceStatusLabel(percentage, minAttendance = 75) {
 
 /** Chronological class-by-class history for one student in one subject. */
 export async function getStudentSubjectHistory(studentId, subjectId) {
-  const sessions = await ClassSession.find({ subject: subjectId })
-    .sort({ date: -1, slot: -1 })
-    .lean();
+  const sessions = await prisma.classSession.findMany({
+    where: { subjectId },
+    orderBy: [{ date: 'desc' }, { slot: 'desc' }],
+  });
 
-  const records = await Attendance.find({
-    student: studentId,
-    session: { $in: sessions.map((s) => s._id) },
-  }).lean();
+  const records = await prisma.attendance.findMany({
+    where: { studentId, sessionId: { in: sessions.map(idOf) } },
+  });
 
-  const bySession = new Map(records.map((r) => [idOf(r.session), r]));
+  const bySession = new Map(records.map((r) => [r.sessionId, r]));
 
   return sessions.map((s) => {
-    const rec = bySession.get(idOf(s));
+    const rec = bySession.get(s.id);
     return {
-      sessionId: String(s._id),
+      sessionId: s.id,
       date: s.dateKey,
       slot: s.slot,
       topic: s.topic,
@@ -223,9 +225,14 @@ export async function getStudentSubjectHistory(studentId, subjectId) {
  * Used by faculty for the report view and to prefill the marking sheet.
  */
 export async function getSubjectRoster(subjectId) {
-  const enrollments = await Enrollment.find({ subject: subjectId, isActive: true })
-    .populate({ path: 'student', select: 'name email rollNumber batch isActive' })
-    .lean();
+  const enrollments = await prisma.enrollment.findMany({
+    where: { subjectId, isActive: true },
+    include: {
+      student: {
+        select: { id: true, name: true, email: true, rollNumber: true, batch: true, isActive: true },
+      },
+    },
+  });
 
   /*
    * The enrollment record itself has nothing to do with whether the student's
@@ -242,33 +249,19 @@ export async function getSubjectRoster(subjectId) {
 
   const conducted = (await getConductedCounts([subjectId]))[idOf(subjectId)] || 0;
 
-  const rows = await Attendance.aggregate([
-    { $match: { subject: oid(subjectId) } },
-    {
-      $lookup: {
-        from: 'classsessions',
-        localField: 'session',
-        foreignField: '_id',
-        as: 'sess',
-        pipeline: [{ $match: { status: 'completed' } }, { $project: { _id: 1 } }],
-      },
-    },
-    { $match: { 'sess.0': { $exists: true } } },
-    {
-      $group: {
-        _id: '$student',
-        present: { $sum: { $cond: [{ $in: ['$status', PRESENT_STATUSES] }, 1, 0] } },
-      },
-    },
-  ]);
-  const presentMap = Object.fromEntries(rows.map((r) => [idOf(r), r.present]));
+  const rows = await prisma.attendance.groupBy({
+    by: ['studentId'],
+    where: { subjectId, status: { in: PRESENT_STATUSES }, session: { status: 'completed' } },
+    _count: { _all: true },
+  });
+  const presentMap = Object.fromEntries(rows.map((r) => [r.studentId, r._count._all]));
 
   return {
     conducted,
     students: students.map((s) => {
       const present = presentMap[idOf(s)] || 0;
       return {
-        studentId: String(s._id),
+        studentId: s.id,
         name: s.name,
         email: s.email,
         rollNumber: s.rollNumber,

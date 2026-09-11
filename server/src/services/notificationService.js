@@ -1,6 +1,4 @@
-import Notification from '../models/Notification.js';
-import User from '../models/User.js';
-import Enrollment from '../models/Enrollment.js';
+import { prisma } from '../config/prisma.js';
 import { emitToUsers } from '../sockets/index.js';
 import { idOf } from '../utils/ids.js';
 
@@ -9,26 +7,36 @@ import { idOf } from '../utils/ids.js';
  * who is offline still finds them in the bell when they next sign in.
  */
 export async function notify(userIds, payload) {
-  const ids = [...new Set(userIds.map(String))].filter(Boolean);
+  const ids = [...new Set(userIds.map(idOf))].filter(Boolean);
   if (!ids.length) return [];
 
-  const docs = await Notification.insertMany(
-    ids.map((user) => ({
-      user,
-      type: payload.type,
-      title: payload.title,
-      message: payload.message,
-      link: payload.link || '',
-      meta: payload.meta || {},
-      requiresAction: Boolean(payload.requiresAction),
-      createdBy: payload.createdBy || null,
-    }))
-  );
+  const base = {
+    type: payload.type,
+    title: payload.title,
+    message: payload.message,
+    link: payload.link || '',
+    meta: payload.meta || {},
+    requiresAction: Boolean(payload.requiresAction),
+    createdById: payload.createdBy ? idOf(payload.createdBy) : null,
+  };
 
-  // Each recipient gets their own document id so "mark read" works per user.
+  /*
+   * createMany returns a count rather than the rows, and each recipient's own
+   * row id is what makes "mark read" work per user — so they are read back.
+   * Stamping one shared createdAt is what makes that read exact: the same
+   * person can hold several notifications of the same type.
+   */
+  const createdAt = new Date();
+  await prisma.notification.createMany({
+    data: ids.map((userId) => ({ ...base, userId, createdAt, updatedAt: createdAt })),
+  });
+  const docs = await prisma.notification.findMany({
+    where: { createdAt, type: base.type, userId: { in: ids } },
+  });
+
   docs.forEach((d) => {
-    emitToUsers([d.user], 'notification:new', {
-      id: String(d._id),
+    emitToUsers([d.userId], 'notification:new', {
+      id: d.id,
       type: d.type,
       title: d.title,
       message: d.message,
@@ -49,18 +57,20 @@ export async function notify(userIds, payload) {
  * about an exam timetable that is not on their page — which reads as the page
  * being broken rather than the item being deleted.
  */
-export async function withdrawNotifications(filter) {
-  const doomed = await Notification.find(filter).select('_id user').lean();
+export async function withdrawNotifications(where) {
+  const doomed = await prisma.notification.findMany({
+    where,
+    select: { id: true, userId: true },
+  });
   if (!doomed.length) return 0;
 
-  await Notification.deleteMany({ _id: { $in: doomed.map((d) => d._id) } });
+  await prisma.notification.deleteMany({ where: { id: { in: doomed.map((d) => d.id) } } });
 
   // Drop it from anyone's open bell, rather than waiting for a reload.
   const byUser = new Map();
   for (const d of doomed) {
-    const key = idOf(d.user);
-    if (!byUser.has(key)) byUser.set(key, []);
-    byUser.get(key).push(idOf(d));
+    if (!byUser.has(d.userId)) byUser.set(d.userId, []);
+    byUser.get(d.userId).push(d.id);
   }
   for (const [user, ids] of byUser) {
     emitToUsers([user], 'notification:removed', { ids });
@@ -71,15 +81,19 @@ export async function withdrawNotifications(filter) {
 
 /** Everyone who should hear about a schedule change on the shared grid. */
 export async function facultyAndAdminIds({ exclude = [] } = {}) {
-  const users = await User.find({ role: { $in: ['faculty', 'admin'] }, isActive: true })
-    .select('_id')
-    .lean();
+  const users = await prisma.user.findMany({
+    where: { role: { in: ['faculty', 'admin'] }, isActive: true },
+    select: { id: true },
+  });
   const skip = new Set(exclude.map(idOf));
   return users.map(idOf).filter((id) => !skip.has(id));
 }
 
 export async function adminIds() {
-  const admins = await User.find({ role: 'admin', isActive: true }).select('_id').lean();
+  const admins = await prisma.user.findMany({
+    where: { role: 'admin', isActive: true },
+    select: { id: true },
+  });
   return admins.map(idOf);
 }
 
@@ -94,18 +108,16 @@ export async function adminIds() {
  */
 export async function studentAudience({ subjectId, sectionId }) {
   if (subjectId) {
-    const rows = await Enrollment.find({ subject: subjectId, isActive: true })
-      .select('student')
-      .lean();
-    if (rows.length) return rows.map((r) => idOf(r.student));
+    const rows = await prisma.enrollment.findMany({
+      where: { subjectId, isActive: true },
+      select: { studentId: true },
+    });
+    if (rows.length) return rows.map((r) => r.studentId);
   }
   if (!sectionId) return [];
-  const rows = await User.find({
-    role: 'student',
-    section: sectionId,
-    isActive: true,
-  })
-    .select('_id')
-    .lean();
+  const rows = await prisma.user.findMany({
+    where: { role: 'student', sectionId, isActive: true },
+    select: { id: true },
+  });
   return rows.map(idOf);
 }

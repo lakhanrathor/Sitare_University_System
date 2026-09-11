@@ -276,7 +276,12 @@ export const deleteExam = asyncHandler(async (req, res) => {
 
   await deleteFiles((exam.attachments || []).map((a) => a.fileId));
   // Nobody should keep being told about a timetable that is gone.
-  await withdrawNotifications({ type: 'exam:published', 'meta.examId': String(exam._id) });
+  await withdrawNotifications({
+    type: 'exam:published',
+    // A Json column, so the key inside it is addressed by path rather than by
+    // Mongo's dotted-string notation.
+    meta: { path: ['examId'], equals: idOf(exam) },
+  });
   await exam.deleteOne();
 
   res.json({ success: true, message: 'Exam timetable removed', data: { id: String(exam._id) } });

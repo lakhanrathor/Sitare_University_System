@@ -2,7 +2,7 @@ import { z } from 'zod';
 import SwapRequest, { SWAP_OPEN } from '../models/SwapRequest.js';
 import ScheduleChange from '../models/ScheduleChange.js';
 import TimetableEntry from '../models/TimetableEntry.js';
-import { sectionLabel } from '../models/Section.js';
+import { sectionLabel } from '../utils/section.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { toUTCDate, todayKey, dayOfWeek, weekDates } from '../utils/date.js';

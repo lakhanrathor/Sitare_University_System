@@ -26,7 +26,4 @@ sectionSchema.virtual('label').get(function label() {
 });
 
 /** How a cohort reads in a compact column or chip. */
-export const sectionLabel = (section) =>
-  section?.name ? `Section ${section.name}` : 'All students';
-
 export default mongoose.model('Section', sectionSchema);

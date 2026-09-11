@@ -1,58 +1,76 @@
 /**
  * Hard deletes for the admin console.
  *
- * Records reference each other across six collections, so removing one thing
- * by itself would leave attendance marks pointing at a subject that no longer
+ * Records reference each other across six tables, so removing one thing by
+ * itself would leave attendance marks pointing at a subject that no longer
  * exists, or a timetable period owned by nobody. Everything an admin can
  * delete is therefore torn down through here, which removes the dependants in
  * the order that keeps the database consistent at every step.
  *
+ * The foreign keys that came with PostgreSQL would now cascade much of this on
+ * their own, and the explicit deletes are kept anyway for two reasons. The
+ * admin is shown a breakdown of exactly what was removed, which a cascade
+ * cannot report. And the rule that matters most here is not a cascade at all —
+ * a departing lecturer leaves their subjects standing, unassigned — so it has
+ * to be expressed as an update in the middle of the sequence. The cascades
+ * remain underneath as a backstop for anything this misses.
+ *
  * These are genuinely destructive and cannot be undone — the caller is
  * responsible for confirming first.
  */
-import User from '../models/User.js';
-import Subject from '../models/Subject.js';
-import Enrollment from '../models/Enrollment.js';
-import ClassSession from '../models/ClassSession.js';
-import Attendance from '../models/Attendance.js';
-import TimetableEntry from '../models/TimetableEntry.js';
-import ScheduleChange from '../models/ScheduleChange.js';
-import SwapRequest from '../models/SwapRequest.js';
-import Notification from '../models/Notification.js';
-
-const ids = (docs) => docs.map((d) => d._id);
+import { prisma } from '../config/prisma.js';
+import { idOf } from '../utils/ids.js';
 
 /** Everything hanging off a set of subjects. */
 export async function purgeSubjects(subjectIds) {
   if (!subjectIds.length) return { subjects: 0 };
 
-  const sessionIds = ids(
-    await ClassSession.find({ subject: { $in: subjectIds } }).select('_id').lean()
-  );
-  const entryIds = ids(
-    await TimetableEntry.find({ subject: { $in: subjectIds } }).select('_id').lean()
-  );
+  const [sessions, entries] = await Promise.all([
+    prisma.classSession.findMany({ where: { subjectId: { in: subjectIds } }, select: { id: true } }),
+    prisma.timetableEntry.findMany({
+      where: { subjectId: { in: subjectIds } },
+      select: { id: true },
+    }),
+  ]);
+  const sessionIds = sessions.map(idOf);
+  const entryIds = entries.map(idOf);
 
   const out = {};
   out.attendance = (
-    await Attendance.deleteMany({
-      $or: [{ subject: { $in: subjectIds } }, { session: { $in: sessionIds } }],
+    await prisma.attendance.deleteMany({
+      where: { OR: [{ subjectId: { in: subjectIds } }, { sessionId: { in: sessionIds } }] },
     })
-  ).deletedCount;
-  out.sessions = (await ClassSession.deleteMany({ _id: { $in: sessionIds } })).deletedCount;
-  out.enrolments = (await Enrollment.deleteMany({ subject: { $in: subjectIds } })).deletedCount;
+  ).count;
+  out.sessions = (await prisma.classSession.deleteMany({ where: { id: { in: sessionIds } } })).count;
+  out.enrolments = (
+    await prisma.enrollment.deleteMany({ where: { subjectId: { in: subjectIds } } })
+  ).count;
   out.swaps = (
-    await SwapRequest.deleteMany({
-      $or: [{ fromEntry: { $in: entryIds } }, { toEntry: { $in: entryIds } }],
+    await prisma.swapRequest.deleteMany({
+      where: { OR: [{ fromEntryId: { in: entryIds } }, { toEntryId: { in: entryIds } }] },
     })
-  ).deletedCount;
+  ).count;
   out.changes = (
-    await ScheduleChange.deleteMany({
-      $or: [{ subject: { $in: subjectIds } }, { entry: { $in: entryIds } }],
+    await prisma.scheduleChange.deleteMany({
+      where: { OR: [{ subjectId: { in: subjectIds } }, { entryId: { in: entryIds } }] },
     })
-  ).deletedCount;
-  out.periods = (await TimetableEntry.deleteMany({ _id: { $in: entryIds } })).deletedCount;
-  out.subjects = (await Subject.deleteMany({ _id: { $in: subjectIds } })).deletedCount;
+  ).count;
+  /*
+   * Three references Mongo let dangle and a foreign key will not. A delegation
+   * belongs to the class it covers, so it goes; an exam paper names a subject
+   * that will not exist, so it goes; a note merely mentions one, and losing
+   * the material along with the subject would be the wrong trade.
+   */
+  await prisma.attendanceDelegation.deleteMany({
+    where: { OR: [{ subjectId: { in: subjectIds } }, { entryId: { in: entryIds } }] },
+  });
+  await prisma.examPaper.deleteMany({ where: { subjectId: { in: subjectIds } } });
+  await prisma.note.updateMany({
+    where: { subjectId: { in: subjectIds } },
+    data: { subjectId: null },
+  });
+  out.periods = (await prisma.timetableEntry.deleteMany({ where: { id: { in: entryIds } } })).count;
+  out.subjects = (await prisma.subject.deleteMany({ where: { id: { in: subjectIds } } })).count;
 
   return out;
 }
@@ -62,51 +80,138 @@ export async function purgeUsers(userIds) {
   if (!userIds.length) return { users: 0 };
 
   const out = {};
-  out.attendance = (await Attendance.deleteMany({ student: { $in: userIds } })).deletedCount;
-  out.enrolments = (await Enrollment.deleteMany({ student: { $in: userIds } })).deletedCount;
-  await Notification.deleteMany({ user: { $in: userIds } });
+  out.attendance = (
+    await prisma.attendance.deleteMany({ where: { studentId: { in: userIds } } })
+  ).count;
+  out.enrolments = (
+    await prisma.enrollment.deleteMany({ where: { studentId: { in: userIds } } })
+  ).count;
+  await prisma.notification.deleteMany({ where: { userId: { in: userIds } } });
 
   // Swaps this person raised or was asked about.
   out.swaps = (
-    await SwapRequest.deleteMany({
-      $or: [{ requestedBy: { $in: userIds } }, { counterparty: { $in: userIds } }],
+    await prisma.swapRequest.deleteMany({
+      where: { OR: [{ requestedById: { in: userIds } }, { counterpartyId: { in: userIds } }] },
     })
-  ).deletedCount;
+  ).count;
 
   /*
    * A departing lecturer leaves their classes standing: the subject and its
    * timetable period survive with nobody assigned, so an admin can hand them
-   * to someone else rather than losing the class.
+   * to someone else rather than losing the class. This is the reason those
+   * foreign keys are SetNull, and the reason this is an update and not a
+   * delete.
    */
-  await Subject.updateMany({ faculty: { $in: userIds } }, { $set: { faculty: null } });
-  await TimetableEntry.updateMany({ faculty: { $in: userIds } }, { $set: { faculty: null } });
-  await ScheduleChange.updateMany({ faculty: { $in: userIds } }, { $set: { faculty: null } });
+  await prisma.subject.updateMany({
+    where: { facultyId: { in: userIds } },
+    data: { facultyId: null },
+  });
+  await prisma.timetableEntry.updateMany({
+    where: { facultyId: { in: userIds } },
+    data: { facultyId: null },
+  });
+  await prisma.scheduleChange.updateMany({
+    where: { facultyId: { in: userIds } },
+    data: { facultyId: null },
+  });
 
-  out.users = (await User.deleteMany({ _id: { $in: userIds } })).deletedCount;
+  /*
+   * Rows that merely name this person rather than belong to them. Mongo was
+   * content to let every one of these point at a deleted account; a foreign
+   * key is not, so each is released before the account goes. Attendance marks
+   * are the one to get right: cascading here would delete every register a
+   * departing lecturer ever took.
+   */
+  await prisma.classSession.updateMany({
+    where: { facultyId: { in: userIds } },
+    data: { facultyId: null },
+  });
+  await prisma.attendance.updateMany({
+    where: { markedById: { in: userIds } },
+    data: { markedById: null },
+  });
+  await prisma.timetable.updateMany({
+    where: { uploadedById: { in: userIds } },
+    data: { uploadedById: null },
+  });
+  await prisma.note.updateMany({
+    where: { uploadedById: { in: userIds } },
+    data: { uploadedById: null },
+  });
+  await prisma.examSchedule.updateMany({
+    where: { publishedById: { in: userIds } },
+    data: { publishedById: null },
+  });
+  await prisma.scheduleChange.updateMany({
+    where: { createdById: { in: userIds } },
+    data: { createdById: null },
+  });
+  await prisma.notification.updateMany({
+    where: { createdById: { in: userIds } },
+    data: { createdById: null },
+  });
+  await prisma.swapRequest.updateMany({
+    where: { decidedById: { in: userIds } },
+    data: { decidedById: null },
+  });
+  await prisma.leaveDocument.updateMany({
+    where: { uploadedById: { in: userIds } },
+    data: { uploadedById: null },
+  });
+  await prisma.attendanceDelegation.updateMany({
+    where: { assignedById: { in: userIds } },
+    data: { assignedById: null },
+  });
+
+  /* These two are the person's own, not a mention of them. */
+  await prisma.attendanceDelegation.deleteMany({ where: { facultyId: { in: userIds } } });
+  await prisma.leaveDocument.deleteMany({ where: { studentId: { in: userIds } } });
+
+  out.users = (await prisma.user.deleteMany({ where: { id: { in: userIds } } })).count;
   return out;
 }
 
 /** A whole cohort: its people, its subjects and its place on the timetable. */
 export async function purgeSection(section) {
-  const students = ids(
-    await User.find({ role: 'student', section: section._id }).select('_id').lean()
-  );
-  const subjects = ids(await Subject.find({ section: section._id }).select('_id').lean());
+  const sectionId = idOf(section);
 
-  const fromSubjects = await purgeSubjects(subjects);
-  const fromUsers = await purgeUsers(students);
+  const [studentRows, subjectRows] = await Promise.all([
+    prisma.user.findMany({ where: { role: 'student', sectionId }, select: { id: true } }),
+    prisma.subject.findMany({ where: { sectionId }, select: { id: true } }),
+  ]);
+
+  const fromSubjects = await purgeSubjects(subjectRows.map(idOf));
+  const fromUsers = await purgeUsers(studentRows.map(idOf));
 
   // Periods and changes attached to the section rather than to a subject.
-  const entryIds = ids(
-    await TimetableEntry.find({ section: section._id }).select('_id').lean()
-  );
-  await SwapRequest.deleteMany({
-    $or: [{ fromEntry: { $in: entryIds } }, { toEntry: { $in: entryIds } }],
+  const entries = await prisma.timetableEntry.findMany({
+    where: { sectionId },
+    select: { id: true },
   });
-  await ScheduleChange.deleteMany({ section: section._id });
-  const extraPeriods = (await TimetableEntry.deleteMany({ section: section._id })).deletedCount;
+  const entryIds = entries.map(idOf);
+  await prisma.swapRequest.deleteMany({
+    where: { OR: [{ fromEntryId: { in: entryIds } }, { toEntryId: { in: entryIds } }] },
+  });
+  await prisma.attendanceDelegation.deleteMany({ where: { entryId: { in: entryIds } } });
+  await prisma.scheduleChange.deleteMany({ where: { sectionId } });
+  const extraPeriods = (await prisma.timetableEntry.deleteMany({ where: { sectionId } })).count;
 
-  await section.deleteOne();
+  /*
+   * Notes and exam schedules were never cleaned up here, which Mongo permitted
+   * — the section id simply dangled. A foreign key will not have that, and the
+   * obvious alternative is worse than the dangling pointer was: a null section
+   * on either of these means "the whole year can read it", so releasing them
+   * would silently widen a deleted cohort's material to everybody. They are
+   * removed with the cohort instead.
+   */
+  await prisma.note.deleteMany({ where: { sectionId } });
+  await prisma.examSchedule.deleteMany({ where: { sectionId } });
+
+  /* Anyone left pointing at the section — a lecturer, an admin — is released
+     rather than deleted; only its students were purged above. */
+  await prisma.user.updateMany({ where: { sectionId }, data: { sectionId: null } });
+
+  await prisma.section.delete({ where: { id: sectionId } });
 
   return {
     students: fromUsers.users || 0,
