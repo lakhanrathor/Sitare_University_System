@@ -128,6 +128,17 @@ un-ported one still reads Mongo. Both fixtures therefore load the same dataset, 
 - a local database: `docker compose up -d db` at the repo root, or any PostgreSQL 15+ at
   `DATABASE_URL`. 15+ is not optional — `NULLS NOT DISTINCT` does not exist before it
 
+**Do not trust a mid-migration result that looks fine.** While a module is still on Mongo and
+`req.user` already comes from Postgres, `req.user._id` is `undefined`, and Mongoose casts that
+to `null` rather than dropping the clause — so an owner-scoped query returns nothing instead of
+everything. That is the safe direction, and it is why most of the app simply looks empty rather
+than leaking. The exception is any filter on a field where `null` is a legitimate stored value:
+`{ section: undefined }` becomes `{ section: null }`, which on `Note` and `ScheduleChange` means
+"the whole year", and on `User` matched every non-student. Treat an empty screen as expected
+during the cutover and a *populated* one as worth checking. The same reasoning is why
+`security-check` now prints a skip where a lecturer teaches nothing: a denial-only assertion
+passes perfectly against a system that has quietly stopped returning anything at all.
+
 ## Domain rules that must not be broken
 
 **Attendance is always `present ÷ conducted`, never `present ÷ planned`.**

@@ -112,8 +112,18 @@ console.log('\nRole-based access control');
     const [facultyA, facultyB] = twoFaculty;
     // A's subjects should never include something owned by B, and vice versa.
     const aSubjects = (await call('/subjects', {}, facultyA.token)).json.data;
-    const bOwnsAny = aSubjects.some((s) => s.faculty?.id === facultyB.user.id);
-    report("faculty A's subject list contains none of faculty B's subjects", !bOwnsAny);
+    /*
+     * An empty list satisfies "contains none of B's" trivially. That is the
+     * same silent pass this file was fixed to stop emitting: say plainly that
+     * there was nothing to compare rather than printing ok for a lecturer who
+     * appears to teach nothing.
+     */
+    if (!aSubjects.length) {
+      console.log('  skip  (faculty A teaches no subjects — nothing to compare)');
+    } else {
+      const bOwnsAny = aSubjects.some((s) => s.faculty?.id === facultyB.user.id);
+      report("faculty A's subject list contains none of faculty B's subjects", !bOwnsAny);
+    }
   } else {
     console.log('  skip  (fewer than two faculty demo logins available)');
   }
@@ -183,6 +193,27 @@ console.log('\nIDOR / resource-level authorization');
       violations === 0,
       `${violations} unrelated student(s) returned 200`
     );
+
+    /*
+     * The positive half. Counting violations alone is satisfied by an endpoint
+     * that refuses everyone, so without this a lecturer who teaches nobody —
+     * or a scoping query that has quietly stopped matching anything — reports
+     * a clean pass. The check is only meaningful if a lecturer can still read
+     * a student they do teach.
+     */
+    if (!myStudentIds.size) {
+      console.log(
+        `  skip  (${fl.user.name} teaches no students here, so "allowed" is untested — only "denied")`
+      );
+    } else {
+      const own = [...myStudentIds][0];
+      const allowed = await call(`/attendance/student/${own}`, {}, fl.token);
+      report(
+        `${fl.user.name} can still read a student they do teach`,
+        allowed.status === 200,
+        `got ${allowed.status}`
+      );
+    }
     break; // one faculty account is enough to demonstrate the check.
   }
 }

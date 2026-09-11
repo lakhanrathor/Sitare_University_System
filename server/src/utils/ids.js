@@ -34,3 +34,17 @@ export function sameId(a, b) {
   const y = idOf(b);
   return x != null && y != null && x === y;
 }
+
+/*
+ * Whether a string is shaped like a PostgreSQL uuid.
+ *
+ * Needed because a JWT outlives the migration: a token issued before a module
+ * moved carries a Mongo ObjectId, and handing that to a `where: { id }` on a
+ * uuid column raises P2023 — a 500 that reads as a server fault rather than
+ * what it is, an expired session. Checking first turns it back into a 401.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuid(value) {
+  return typeof value === 'string' && UUID.test(value);
+}

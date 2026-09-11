@@ -13,17 +13,14 @@
  * ERP lookup, the active check, and refusing to trust anything else the
  * token might carry.
  *
- * Connects to the same MongoDB the app uses. Run after `npm run seed` (or
- * against a dev database with real accounts) so known users exist:
+ * Connects to the same PostgreSQL the app uses. Run after `npm run seed:demo:pg`
+ * (or against a dev database with real accounts) so known users exist — with
+ * only an admin, most of this file skips:
  *   node google-auth-check.mjs
  */
-import { connectDB, disconnectDB } from './src/config/db.js';
+import { prisma } from './src/config/prisma.js';
 import { resolveGoogleUser } from './src/controllers/authController.js';
-import User from './src/models/User.js';
 import ApiError from './src/utils/ApiError.js';
-// Registered for its side effect only: resolveGoogleUser populates `section`,
-// which throws unless this model has been registered with mongoose first.
-import './src/models/Section.js';
 
 let pass = 0;
 let fail = 0;
@@ -55,7 +52,7 @@ const basePayload = (email, extra = {}) => ({
   ...extra,
 });
 
-await connectDB();
+await prisma.$connect();
 console.log('== Google sign-in business rules ==\n');
 
 console.log('Rejected before any account is even looked up');
@@ -79,23 +76,23 @@ await expectRejection(
   403
 );
 
-const beforeCount = await User.countDocuments();
+const beforeCount = await prisma.user.count();
 try {
   await resolveGoogleUser(basePayload(`ghost-${Date.now()}@sitare.org`));
 } catch {
   /* expected to throw — the point is whether it also created anything */
 }
-const afterCount = await User.countDocuments();
+const afterCount = await prisma.user.count();
 report(
   'an unknown account is never auto-created',
   afterCount === beforeCount,
   `${beforeCount} -> ${afterCount}`
 );
 
-const admin = await User.findOne({ role: 'admin', isActive: true }).lean();
-const faculty = await User.findOne({ role: 'faculty', isActive: true }).lean();
-const student = await User.findOne({ role: 'student', isActive: true }).lean();
-const disabled = await User.findOne({ isActive: false }).lean();
+const admin = await prisma.user.findFirst({ where: { role: 'admin', isActive: true } });
+const faculty = await prisma.user.findFirst({ where: { role: 'faculty', isActive: true } });
+const student = await prisma.user.findFirst({ where: { role: 'student', isActive: true } });
+const disabled = await prisma.user.findFirst({ where: { isActive: false } });
 
 if (admin) {
   const u = await resolveGoogleUser(basePayload(admin.email));
@@ -139,9 +136,9 @@ if (student) {
 
 console.log('\nAccount linking (Google subject id)');
 if (student) {
-  const fresh = await User.findOne({ email: student.email });
+  const fresh = await prisma.user.findUnique({ where: { email: student.email } });
   const originalSub = fresh.googleSub;
-  await User.updateOne({ _id: fresh._id }, { $set: { googleSub: null } });
+  await prisma.user.update({ where: { id: fresh.id }, data: { googleSub: null } });
 
   const firstLogin = await resolveGoogleUser(basePayload(student.email, { sub: 'linking-test-sub-1' }));
   report(
@@ -149,18 +146,18 @@ if (student) {
     firstLogin.googleSub === 'linking-test-sub-1'
   );
 
-  const before = await User.countDocuments({ email: student.email });
+  const before = await prisma.user.count({ where: { email: student.email } });
   await resolveGoogleUser(basePayload(student.email, { sub: 'linking-test-sub-1' }));
-  const after = await User.countDocuments({ email: student.email });
+  const after = await prisma.user.count({ where: { email: student.email } });
   report(
     'signing in again with the same email never creates a second record',
     before === after && after === 1
   );
 
   // Leave the account exactly as this test found it.
-  await User.updateOne({ _id: fresh._id }, { $set: { googleSub: originalSub } });
+  await prisma.user.update({ where: { id: fresh.id }, data: { googleSub: originalSub ?? null } });
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
-await disconnectDB();
+await prisma.$disconnect();
 process.exit(fail ? 1 : 0);

@@ -67,7 +67,14 @@ async function login(email, password) {
 /* Canonicalisation                                                    */
 /* ------------------------------------------------------------------ */
 
-const OBJECT_ID = /^[0-9a-f]{24}$/i;
+/*
+ * Two id shapes, because both databases are live during the migration: a
+ * Mongo ObjectId from an un-ported module and a UUID from a ported one. An
+ * unrecognised id survives canonicalisation and then differs on every
+ * reseed, so the baseline would churn rather than catch anything.
+ */
+const ID_ANY = /^(?:[0-9a-f]{24}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const ID_EMBEDDED = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{24}/gi;
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TS = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z?$/;
 
@@ -109,7 +116,7 @@ function canonical(value) {
   if (value === null || value === undefined) return value;
 
   if (typeof value === 'string') {
-    if (OBJECT_ID.test(value)) return alias(value);
+    if (ID_ANY.test(value)) return alias(value);
     if (ISO_TS.test(value)) return '@ts';
     if (DATE_KEY.test(value) && monday) return dateAlias(value);
     /*
@@ -119,7 +126,7 @@ function canonical(value) {
      * those through and made the baseline churn on every reseed.
      */
     return value
-      .replace(/[0-9a-f]{24}/gi, (m) => alias(m))
+      .replace(ID_EMBEDDED, (m) => alias(m))
       .replace(/\d{4}-\d{2}-\d{2}/g, (m) => (monday ? dateAlias(m) : m));
   }
 
@@ -278,7 +285,7 @@ async function collect() {
   // Embedded, not just whole-string — a composite key like
   // "<objectId>-2026-09-07-1" is exactly the kind of leak that slips past a
   // whole-string check and then churns the baseline on every reseed.
-  const leaked = [...JSON.stringify(snapshot).matchAll(/[0-9a-f]{24}/gi)].map((m) => m[0]);
+  const leaked = [...JSON.stringify(snapshot).matchAll(ID_EMBEDDED)].map((m) => m[0]);
   if (leaked.length) {
     console.error(`\n  ${leaked.length} un-aliased id(s) leaked into the snapshot, e.g. ${leaked[0]}`);
     console.error('  Fix the canonicaliser before trusting this baseline.\n');
