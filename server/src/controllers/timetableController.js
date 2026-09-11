@@ -1,16 +1,13 @@
 import { z } from 'zod';
-import Timetable from '../models/Timetable.js';
-import TimetableEntry, { ENTRY_KINDS } from '../models/TimetableEntry.js';
-import AttendanceDelegation from '../models/AttendanceDelegation.js';
-import Section from '../models/Section.js';
-import Subject from '../models/Subject.js';
-import User from '../models/User.js';
-import Enrollment from '../models/Enrollment.js';
+import { prisma } from '../config/prisma.js';
+import { ENTRY_KINDS } from '../config/slots.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { parseCSVToObjects, toCSV } from '../utils/csv.js';
 import { parseTimetablePDF } from '../services/pdfParser.js';
 import { todayKey, toUTCDate } from '../utils/date.js';
+import { idOf, sameId } from '../utils/ids.js';
+import { hashPassword, sectionIdOf } from '../utils/user.js';
 import { SLOTS, LUNCH, DAYS, parseDay, isValidSlot, dayName } from '../config/slots.js';
 import {
   getWeek,
@@ -36,12 +33,12 @@ export const uploadSchema = z.object({
 
 const editEntrySchema = z.object({
   /** Point the period at a different subject already on the semester. */
-  subjectId: z.string().length(24).nullable().optional(),
+  subjectId: z.string().uuid().nullable().optional(),
   /** Or name one: renames the current subject, or creates it if there is none. */
   subjectName: z.string().trim().min(1).max(160).optional(),
   subjectCode: z.string().trim().min(1).max(12).optional(),
 
-  facultyId: z.string().length(24).nullable().optional(),
+  facultyId: z.string().uuid().nullable().optional(),
   /**
    * 'subject' hands the whole subject to that lecturer everywhere it runs.
    * 'day' hands them only this subject's periods on this one recurring day —
@@ -75,39 +72,48 @@ const editEntrySchema = z.object({
 export const editEntry = asyncHandler(async (req, res) => {
   const body = editEntrySchema.parse(req.body);
   const entry = await loadEntryForAdmin(req.params.entryId);
-  const timetable = await Timetable.findById(entry.timetable).lean();
+  const timetable = await prisma.timetable.findUnique({ where: { id: entry.timetableId } });
   const semester = timetable?.semester;
 
+  /*
+   * Collected rather than written as we go, so a correction touching four
+   * fields is one update at the bottom instead of four round trips — and
+   * cannot half-apply if one of them is rejected.
+   */
+  const data = {};
   const changes = [];
 
   /* ---- Which subject this period is ---- */
   if (body.subjectId !== undefined) {
     if (body.subjectId === null) {
-      entry.subject = null;
+      data.subjectId = null;
+      entry.subjectId = null;
       changes.push('subject cleared');
     } else {
-      const next = await Subject.findById(body.subjectId);
+      const next = await prisma.subject.findUnique({ where: { id: body.subjectId } });
       if (!next) throw ApiError.notFound('Subject not found');
-      entry.subject = next._id;
+      data.subjectId = next.id;
+      entry.subjectId = next.id;
       changes.push(`now ${next.code}`);
     }
   }
 
   /* ---- Its name and code, corrected for good ---- */
   if (body.subjectName || body.subjectCode) {
-    const current = entry.subject
-      ? await Subject.findById(entry.subject._id || entry.subject)
+    const current = entry.subjectId
+      ? await prisma.subject.findUnique({ where: { id: entry.subjectId } })
       : null;
 
     if (current) {
       const before = current.name;
-      if (body.subjectName) current.name = body.subjectName;
-      if (body.subjectCode) current.code = body.subjectCode.toUpperCase();
-      await current.save();
+      const patch = {};
+      if (body.subjectName) patch.name = body.subjectName;
+      if (body.subjectCode) patch.code = body.subjectCode.toUpperCase();
+      const saved = await prisma.subject.update({ where: { id: current.id }, data: patch });
       if (body.subjectName && body.subjectName !== before) {
         changes.push(`renamed "${before}" to "${body.subjectName}"`);
       }
-      if (body.subjectCode) changes.push(`code ${current.code}`);
+      if (body.subjectCode) changes.push(`code ${saved.code}`);
     } else {
       /*
        * A period with no subject — an event the parser could not place. Naming
@@ -123,8 +129,9 @@ export const editEntry = asyncHandler(async (req, res) => {
         semester,
         facultyId: body.facultyId || null,
       });
-      entry.subject = created._id;
-      if (entry.kind === 'event') entry.kind = 'lecture';
+      data.subjectId = created.id;
+      entry.subjectId = created.id;
+      if (entry.kind === 'event') data.kind = 'lecture';
       changes.push(`created ${created.code} and enrolled the cohort`);
     }
   }
@@ -132,30 +139,29 @@ export const editEntry = asyncHandler(async (req, res) => {
   /* ---- Who takes it ---- */
   if (body.facultyId !== undefined) {
     const person = body.facultyId
-      ? await User.findOne({ _id: body.facultyId, role: 'faculty', isActive: true })
+      ? await prisma.user.findFirst({
+          where: { id: body.facultyId, role: 'faculty', isActive: true },
+        })
       : null;
     if (body.facultyId && !person) throw ApiError.notFound('That lecturer was not found');
 
     if (body.applyFacultyTo === 'entry') {
-      entry.faculty = person?._id || null;
+      data.facultyId = person?.id || null;
       changes.push(person ? `${person.name} takes this period` : 'lecturer cleared here');
-    } else if (body.applyFacultyTo === 'day' && (entry.subject?._id || entry.subject)) {
-      const subjectId = entry.subject?._id || entry.subject;
-      const sectionId = entry.section?._id ?? entry.section ?? null;
+    } else if (body.applyFacultyTo === 'day' && entry.subjectId) {
       // Every period of this same subject, this same day, for this same
       // cohort — the whole block this one period belongs to.
-      const dayEntries = await TimetableEntry.find({
-        timetable: entry.timetable,
-        dayOfWeek: entry.dayOfWeek,
-        subject: subjectId,
-        section: sectionId,
-      }).select('_id');
-      await TimetableEntry.updateMany(
-        { _id: { $in: dayEntries.map((e) => e._id) } },
-        { $set: { faculty: person?._id || null } }
-      );
-      // Keeps entry.save() below from writing a stale value back over this.
-      entry.faculty = person?._id || null;
+      await prisma.timetableEntry.updateMany({
+        where: {
+          timetableId: entry.timetableId,
+          dayOfWeek: entry.dayOfWeek,
+          subjectId: entry.subjectId,
+          sectionId: entry.sectionId ?? null,
+        },
+        data: { facultyId: person?.id || null },
+      });
+      // Keeps the update below from writing a stale value back over this.
+      data.facultyId = person?.id || null;
       changes.push(
         person
           ? `${person.name} takes every period of this subject on ${dayName(entry.dayOfWeek)}`
@@ -169,28 +175,53 @@ export const editEntry = asyncHandler(async (req, res) => {
           'A subject must have a lecturer — clear the lecturer for just this period instead, or choose a replacement.'
         );
       }
-      // Assign the subject itself, so nothing anywhere still reads unassigned.
-      const subjectId = entry.subject?._id || entry.subject;
-      if (subjectId) {
-        await Subject.updateOne({ _id: subjectId }, { $set: { faculty: person._id } });
+      /*
+       * "Becomes theirs everywhere" has to mean everywhere. Handing the
+       * subject over is only half of it: each period can carry its own
+       * lecturer, and any period still holding one goes on displaying the
+       * previous lecturer no matter who owns the subject. Clearing them is
+       * what makes the rest of the grid follow — without it exactly one cell
+       * changed, the one that was clicked, and the option silently did
+       * something much narrower than it offered.
+       *
+       * Both in one transaction: a subject owned by one lecturer while its
+       * periods still name another is the inconsistency this is fixing.
+       */
+      let followed = 0;
+      if (entry.subjectId) {
+        const [, cleared] = await prisma.$transaction([
+          prisma.subject.update({
+            where: { id: entry.subjectId },
+            data: { facultyId: person.id },
+          }),
+          prisma.timetableEntry.updateMany({
+            where: { subjectId: entry.subjectId, facultyId: { not: null } },
+            data: { facultyId: null },
+          }),
+        ]);
+        followed = cleared.count;
       }
-      // Clear the per-period override so the cell inherits the new owner.
-      entry.faculty = null;
-      changes.push(`assigned to ${person.name}`);
+      // This period inherits the new owner along with the rest.
+      data.facultyId = null;
+      changes.push(
+        followed > 1
+          ? `assigned to ${person.name} — ${followed} periods now follow the subject`
+          : `assigned to ${person.name}`
+      );
     }
   }
 
   if (body.kind !== undefined) {
-    entry.kind = body.kind;
+    data.kind = body.kind;
     changes.push(`kind ${body.kind}`);
   }
   if (body.title !== undefined) {
-    entry.title = body.title;
+    data.title = body.title;
     changes.push(body.title ? `note "${body.title}"` : 'note cleared');
   }
-  if (body.room !== undefined) entry.room = body.room;
+  if (body.room !== undefined) data.room = body.room;
 
-  await entry.save();
+  await prisma.timetableEntry.update({ where: { id: entry.id }, data });
 
   /*
    * A correction is not private: the lecturer who has just been given the
@@ -198,17 +229,17 @@ export const editEntry = asyncHandler(async (req, res) => {
    */
   const staff = await facultyAndAdminIds();
   const students = await studentAudience({
-    subjectId: entry.subject?._id || entry.subject,
-    sectionId: entry.section?._id || entry.section,
+    subjectId: entry.subjectId,
+    sectionId: entry.sectionId,
   });
-  emitToUsers([...staff, ...students, String(req.user._id)], 'timetable:changed', {
+  emitToUsers([...staff, ...students, idOf(req.user)], 'timetable:changed', {
     reason: 'corrected',
   });
 
   res.json({
     success: true,
     message: changes.length ? `Updated — ${changes.join(', ')}` : 'Nothing to change',
-    data: { entryId: String(entry._id) },
+    data: { entryId: entry.id },
   });
 });
 
@@ -217,43 +248,49 @@ export const editEntry = asyncHandler(async (req, res) => {
  * Without the enrolment the register would open with nobody on it.
  */
 async function createSubjectForEntry(entry, { name, code, semester, facultyId }) {
-  const sectionId = entry.section?._id || entry.section || null;
-  const sections = await Section.find({ isActive: true, semester: Number(semester) }).lean();
-  const owner = sectionId || sections[0]?._id;
+  const sectionId = entry.sectionId || null;
+  const sections = await prisma.section.findMany({
+    where: { isActive: true, semester: Number(semester) },
+  });
+  const owner = sectionId || sections[0]?.id;
   if (!owner) throw ApiError.badRequest('This semester has no cohort to attach a subject to');
 
   const taken = new Set(
-    (await Subject.find({ section: owner }).select('code').lean()).map((s) => s.code.toUpperCase())
+    (
+      await prisma.subject.findMany({ where: { sectionId: owner }, select: { code: true } })
+    ).map((s) => s.code.toUpperCase())
   );
   const finalCode = code ? code.toUpperCase() : deriveCode(name, taken);
   if (code && taken.has(finalCode)) {
     throw ApiError.conflict(`${finalCode} already exists for this cohort`);
   }
 
-  const subject = await Subject.create({
-    code: finalCode,
-    name,
-    semester: Number(semester),
-    section: owner,
-    faculty: facultyId || null,
-    department: sections[0]?.department || 'Computer Science',
-    plannedClasses: 30,
-    minAttendance: 75,
+  const subject = await prisma.subject.create({
+    data: {
+      code: finalCode,
+      name,
+      semester: Number(semester),
+      sectionId: owner,
+      facultyId: facultyId || null,
+      department: sections[0]?.department || 'Computer Science',
+      plannedClasses: 30,
+      minAttendance: 75,
+    },
   });
 
   /*
    * A section-less period is the whole year sitting together, so everybody in
    * the semester attends it — not just the cohort the subject hangs off.
    */
-  const studentFilter = sectionId
-    ? { role: 'student', isActive: true, section: sectionId }
-    : { role: 'student', isActive: true, section: { $in: sections.map((s) => s._id) } };
-  const students = await User.find(studentFilter).select('_id').lean();
+  const where = sectionId
+    ? { role: 'student', isActive: true, sectionId }
+    : { role: 'student', isActive: true, sectionId: { in: sections.map(idOf) } };
+  const students = await prisma.user.findMany({ where, select: { id: true } });
   if (students.length) {
-    await Enrollment.insertMany(
-      students.map((st) => ({ student: st._id, subject: subject._id })),
-      { ordered: false }
-    ).catch(() => {});
+    await prisma.enrollment.createMany({
+      data: students.map((st) => ({ studentId: st.id, subjectId: subject.id })),
+      skipDuplicates: true,
+    });
   }
 
   return subject;
@@ -265,32 +302,39 @@ async function createSubjectForEntry(entry, { name, code, semester, facultyId })
 
 const attendanceBySchema = z.object({
   // null clears the hand-over and returns the register to its own lecturer.
-  facultyId: z.string().length(24).nullable(),
+  facultyId: z.string().uuid().nullable(),
   // Only needed for a period that carries no subject, e.g. "Session with Dean".
-  subjectId: z.string().length(24).nullable().optional(),
+  subjectId: z.string().uuid().nullable().optional(),
   // The single class being handed over. Never the whole weekly period.
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'),
 });
 
 const loadEntryForAdmin = async (entryId) => {
-  const entry = await TimetableEntry.findById(entryId)
-    .populate('subject', 'code name faculty semester')
-    .populate('faculty', 'name email')
-    .populate('section', 'name semester');
+  const entry = await prisma.timetableEntry.findUnique({
+    where: { id: entryId },
+    include: {
+      subject: { select: { id: true, code: true, name: true, facultyId: true, semester: true } },
+      faculty: { select: { id: true, name: true, email: true } },
+      section: { select: { id: true, name: true, semester: true } },
+    },
+  });
   if (!entry) throw ApiError.notFound('That period is not on the timetable');
   return entry;
 };
 
 /** The hand-over in force for one dated class, if there is one. */
 const delegationFor = (entry, dateKey) =>
-  AttendanceDelegation.findOne({
-    dateKey,
-    slot: entry.slot,
-    $or: [
-      { entry: entry._id },
-      ...(entry.subject ? [{ subject: entry.subject._id }] : []),
-    ],
-  }).populate('faculty', 'name email');
+  prisma.attendanceDelegation.findFirst({
+    where: {
+      dateKey,
+      slot: entry.slot,
+      OR: [
+        { entryId: entry.id },
+        ...(entry.subjectId ? [{ subjectId: entry.subjectId }] : []),
+      ],
+    },
+    include: { faculty: { select: { id: true, name: true, email: true } } },
+  });
 
 /**
  * Every lecturer, flagged with what they are already doing in this period.
@@ -304,16 +348,17 @@ export const listAttendanceCandidates = asyncHandler(async (req, res) => {
   const entry = await loadEntryForAdmin(req.params.entryId);
   const date = req.query.date || todayKey();
 
-  const ownerId = String(entry.faculty?._id || entry.subject?.faculty || '');
+  const ownerId = entry.facultyId || entry.subject?.facultyId || '';
   const current = await delegationFor(entry, date);
 
   const [faculty, { byDate }] = await Promise.all([
     // The owner is not a stand-in for themselves — "its own lecturer" is the
     // other option in the list.
-    User.find({ role: 'faculty', isActive: true, ...(ownerId ? { _id: { $ne: ownerId } } : {}) })
-      .select('name email')
-      .sort({ name: 1 })
-      .lean(),
+    prisma.user.findMany({
+      where: { role: 'faculty', isActive: true, ...(ownerId ? { id: { not: ownerId } } : {}) },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
+    }),
     resolveOccurrences([date]),
   ]);
 
@@ -321,11 +366,11 @@ export const listAttendanceCandidates = asyncHandler(async (req, res) => {
     (o) =>
       o.slot === entry.slot &&
       !['moved-out', 'cancelled'].includes(o.origin) &&
-      String(o.entryId) !== String(entry._id)
+      !sameId(o.entryId, entry)
   );
   const busy = new Map();
   for (const o of atSlot) {
-    if (o.faculty) busy.set(String(o.faculty.id), o);
+    if (o.faculty) busy.set(idOf(o.faculty), o);
   }
 
   res.json({
@@ -334,24 +379,24 @@ export const listAttendanceCandidates = asyncHandler(async (req, res) => {
       date,
       slot: entry.slot,
       owner: entry.faculty
-        ? { id: String(entry.faculty._id), name: entry.faculty.name }
-        : entry.subject?.faculty
-          ? { id: String(entry.subject.faculty), name: '' }
+        ? { id: entry.faculty.id, name: entry.faculty.name }
+        : entry.subject?.facultyId
+          ? { id: entry.subject.facultyId, name: '' }
           : null,
       subject: entry.subject
-        ? { id: String(entry.subject._id), code: entry.subject.code, name: entry.subject.name }
+        ? { id: entry.subject.id, code: entry.subject.code, name: entry.subject.name }
         : null,
       title: entry.title,
       attendanceBy: current?.faculty
-        ? { id: String(current.faculty._id), name: current.faculty.name }
+        ? { id: current.faculty.id, name: current.faculty.name }
         : null,
       // What the hand-over's register counts towards, when the period has no
       // subject of its own.
-      countsToward: current?.subject ? String(current.subject) : null,
+      countsToward: current?.subjectId || null,
       candidates: faculty.map((f) => {
-        const clash = busy.get(String(f._id));
+        const clash = busy.get(idOf(f));
         return {
-          id: String(f._id),
+          id: f.id,
           name: f.name,
           email: f.email,
           free: !clash,
@@ -376,15 +421,17 @@ export const setAttendanceBy = asyncHandler(async (req, res) => {
   const existing = await delegationFor(entry, date);
 
   if (!facultyId) {
-    if (existing) await existing.deleteOne();
+    if (existing) await prisma.attendanceDelegation.delete({ where: { id: existing.id } });
     return res.json({
       success: true,
       message: 'Register returned to its own lecturer',
-      data: { entryId: String(entry._id), date },
+      data: { entryId: entry.id, date },
     });
   }
 
-  const person = await User.findOne({ _id: facultyId, role: 'faculty', isActive: true });
+  const person = await prisma.user.findFirst({
+    where: { id: facultyId, role: 'faculty', isActive: true },
+  });
   if (!person) throw ApiError.notFound('That lecturer was not found');
 
   /*
@@ -393,46 +440,53 @@ export const setAttendanceBy = asyncHandler(async (req, res) => {
    * stored on the hand-over rather than written onto the weekly grid, so the
    * period itself stays the event it was.
    */
-  const subject = entry.subject || (subjectId ? await Subject.findById(subjectId) : null);
+  const subject =
+    entry.subject || (subjectId ? await prisma.subject.findUnique({ where: { id: subjectId } }) : null);
   if (!subject) {
     throw ApiError.badRequest(
       'This period has no subject, so there is no register to mark. Choose the subject its attendance counts towards.'
     );
   }
 
-  const doc = await AttendanceDelegation.findOneAndUpdate(
-    { subject: subject._id, dateKey: date, slot: entry.slot },
-    {
-      $set: { faculty: person._id, entry: entry._id, assignedBy: req.user._id },
-      $setOnInsert: { subject: subject._id, dateKey: date, slot: entry.slot },
+  const doc = await prisma.attendanceDelegation.upsert({
+    where: {
+      subjectId_dateKey_slot: { subjectId: subject.id, dateKey: date, slot: entry.slot },
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
+    create: {
+      subjectId: subject.id,
+      dateKey: date,
+      slot: entry.slot,
+      facultyId: person.id,
+      entryId: entry.id,
+      assignedById: idOf(req.user),
+    },
+    update: { facultyId: person.id, entryId: entry.id, assignedById: idOf(req.user) },
+  });
 
   const what = `${subject.code}${entry.title ? ` (${entry.title})` : ''} on ${date}, period ${entry.slot}`;
-  await notify([person._id], {
+  await notify([person.id], {
     type: 'attendance:delegated',
     title: 'You have been asked to mark a register',
     message: `${what}. Just this one class — the marks are recorded against its own lecturer.`,
     link: '/faculty',
-    createdBy: req.user._id,
+    createdBy: idOf(req.user),
   });
 
-  const owner = entry.faculty?._id || subject.faculty || null;
-  if (owner && String(owner) !== String(person._id)) {
+  const owner = entry.facultyId || subject.facultyId || null;
+  if (owner && !sameId(owner, person)) {
     await notify([owner], {
       type: 'attendance:delegated',
       title: 'Someone else will mark your register',
       message: `${person.name} was asked to mark ${what}. The attendance still counts as yours.`,
       link: '/faculty',
-      createdBy: req.user._id,
+      createdBy: idOf(req.user),
     });
   }
 
   res.json({
     success: true,
     message: `Register for ${date} handed to ${person.name}`,
-    data: { entryId: String(entry._id), date, id: String(doc._id) },
+    data: { entryId: entry.id, date, id: doc.id },
   });
 });
 
@@ -443,7 +497,10 @@ export const setAttendanceBy = asyncHandler(async (req, res) => {
 /** Slot/day/section reference data the client needs to draw the grid. */
 export const getMeta = asyncHandler(async (req, res) => {
   const [sections, published] = await Promise.all([
-    Section.find({ isActive: true }).sort({ semester: 1, name: 1 }).lean(),
+    prisma.section.findMany({
+      where: { isActive: true },
+      orderBy: [{ semester: 'asc' }, { name: 'asc' }],
+    }),
     getPublishedTimetables(),
   ]);
 
@@ -452,10 +509,18 @@ export const getMeta = asyncHandler(async (req, res) => {
   const semesters = published
     .map((t) => ({
       semester: t.semester,
-      timetableId: String(t._id),
+      timetableId: t.id,
       name: t.name,
       slots: slotsOf(t),
-      lunch: t.lunch || LUNCH,
+      // Four columns reassembled into the shape the client already reads.
+      lunch: t.lunchStart
+        ? {
+            label: t.lunchLabel || 'LUNCH',
+            start: t.lunchStart,
+            end: t.lunchEnd,
+            afterSlot: t.lunchAfterSlot,
+          }
+        : LUNCH,
       sectionCount: sections.filter((s) => s.semester === t.semester).length,
     }))
     .sort((a, b) => a.semester - b.semester);
@@ -468,7 +533,7 @@ export const getMeta = asyncHandler(async (req, res) => {
       lunch: LUNCH,
       days: DAYS,
       semesters,
-      sections: sections.map((s) => ({ id: String(s._id), name: s.name, semester: s.semester })),
+      sections: sections.map((s) => ({ id: s.id, name: s.name, semester: s.semester })),
     },
   });
 });
@@ -491,9 +556,9 @@ export const getWeekGrid = asyncHandler(async (req, res) => {
      * sheet on the noticeboard does.
      */
     sectionId = undefined;
-    const own = req.user.sectionId();
+    const own = sectionIdOf(req.user);
     if (!own) throw ApiError.badRequest('You have not been assigned to a semester yet');
-    const section = await Section.findById(own).lean();
+    const section = await prisma.section.findUnique({ where: { id: own } });
     semester = section?.semester;
   } else if (!semester) {
     // Staff default to the lowest semester that has a live grid.
@@ -509,16 +574,16 @@ export const getWeekGrid = asyncHandler(async (req, res) => {
 });
 
 export const listTimetables = asyncHandler(async (_req, res) => {
-  const list = await Timetable.find()
-    .sort({ createdAt: -1 })
-    .populate('uploadedBy', 'name')
-    .limit(30)
-    .lean();
+  const list = await prisma.timetable.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 30,
+    include: { uploadedBy: { select: { name: true } } },
+  });
 
   res.json({
     success: true,
     data: list.map((t) => ({
-      id: String(t._id),
+      id: t.id,
       name: t.name,
       semester: t.semester,
       status: t.status,
@@ -545,12 +610,15 @@ export const downloadTemplate = asyncHandler(async (req, res) => {
   if (req.query.current === 'true') {
     const tt = await getPublishedTimetable(req.query.semester);
     if (tt) {
-      const entries = await TimetableEntry.find({ timetable: tt._id })
-        .populate('section', 'name')
-        .populate('subject', 'code')
-        .populate('faculty', 'email')
-        .sort({ dayOfWeek: 1, slot: 1 })
-        .lean();
+      const entries = await prisma.timetableEntry.findMany({
+        where: { timetableId: tt.id },
+        include: {
+          section: { select: { name: true } },
+          subject: { select: { code: true } },
+          faculty: { select: { email: true } },
+        },
+        orderBy: [{ dayOfWeek: 'asc' }, { slot: 'asc' }],
+      });
       entries.forEach((e) =>
         rows.push([
           dayName(e.dayOfWeek),
@@ -590,9 +658,9 @@ export const downloadTemplate = asyncHandler(async (req, res) => {
 async function buildCatalogue(semester) {
   const scope = semester ? { semester: Number(semester) } : {};
   const [subjects, faculty, sections] = await Promise.all([
-    Subject.find({ isActive: true, ...scope }).lean(),
-    User.find({ role: 'faculty', isActive: true }).lean(),
-    Section.find({ isActive: true, ...scope }).lean(),
+    prisma.subject.findMany({ where: { isActive: true, ...scope } }),
+    prisma.user.findMany({ where: { role: 'faculty', isActive: true } }),
+    prisma.section.findMany({ where: { isActive: true, ...scope } }),
   ]);
 
   return {
@@ -687,9 +755,12 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
   const scope = semester ? { semester: Number(semester) } : {};
 
   const [sections, subjects, faculty] = await Promise.all([
-    Section.find({ isActive: true, ...scope }).lean(),
-    Subject.find({ isActive: true, ...scope }).populate('section', 'name').lean(),
-    User.find({ role: 'faculty', isActive: true }).lean(),
+    prisma.section.findMany({ where: { isActive: true, ...scope } }),
+    prisma.subject.findMany({
+      where: { isActive: true, ...scope },
+      include: { section: { select: { id: true, name: true } } },
+    }),
+    prisma.user.findMany({ where: { role: 'faculty', isActive: true } }),
   ]);
 
   const sectionByName = new Map(sections.map((s) => [s.name.toUpperCase(), s]));
@@ -715,12 +786,14 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
   const department = sections[0]?.department || 'Computer Science';
   for (const name of missingSections) {
     if (create) {
-      const doc = await Section.create({ name, semester: Number(semester), department });
+      const doc = await prisma.section.create({
+        data: { name, semester: Number(semester), department },
+      });
       sections.push(doc);
       sectionByName.set(name, doc);
     } else {
       // Preview only: a stand-in so validation can proceed without writing.
-      const stub = { _id: `new:${name}`, name, semester: Number(semester), department };
+      const stub = { id: `new:${name}`, name, semester: Number(semester), department };
       sections.push(stub);
       sectionByName.set(name, stub);
     }
@@ -728,10 +801,10 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
   const facultyByEmail = new Map(faculty.map((f) => [f.email.toLowerCase(), f]));
   const facultyByName = new Map(faculty.map((f) => [normName(f.name), f]));
   const subjectByKey = new Map(
-    subjects.map((s) => [`${s.code.toUpperCase()}|${String(s.section?._id ?? '')}`, s])
+    subjects.map((s) => [`${s.code.toUpperCase()}|${s.sectionId ?? ''}`, s])
   );
   const subjectByName = new Map(
-    subjects.map((s) => [`${normName(s.name)}|${String(s.section?._id ?? '')}`, s])
+    subjects.map((s) => [`${normName(s.name)}|${s.sectionId ?? ''}`, s])
   );
 
   /*
@@ -744,11 +817,7 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
     if (!takenBySection.has(sid)) {
       takenBySection.set(
         sid,
-        new Set(
-          subjects
-            .filter((s) => String(s.section?._id ?? s.section) === sid)
-            .map((s) => s.code.toUpperCase())
-        )
+        new Set(subjects.filter((s) => s.sectionId === sid).map((s) => s.code.toUpperCase()))
       );
     }
     return takenBySection.get(sid);
@@ -769,12 +838,12 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
     const key = normName(rawName);
     if (!key) return null;
     const existing = facultyByName.get(key);
-    if (existing) return { id: existing._id, name: existing.name, isNew: false };
+    if (existing) return { id: existing.id, name: existing.name, isNew: false };
 
     // "Ms Preeti Shukla/Ms Riya Bangera" — the first named owns the subject.
     const primary = String(rawName).split(/[/,]|\s+&\s+/)[0].trim();
     const byPrimary = facultyByName.get(normName(primary));
-    if (byPrimary) return { id: byPrimary._id, name: byPrimary.name, isNew: false };
+    if (byPrimary) return { id: byPrimary.id, name: byPrimary.name, isNew: false };
 
     const slug = normName(primary)
       .replace(/\b(dr|mr|mrs|ms|prof)\b/g, '')
@@ -835,7 +904,7 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
        * enrolled — see the enrolment step below.
        */
       const owner = section || sections[0];
-      const sid = String(owner._id);
+      const sid = idOf(owner);
       let subject = null;
       let pendingSubject = null;
 
@@ -856,7 +925,7 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
          * what the subject is called.
          */
         if (subject && normName(subject.name) !== normName(subjName)) {
-          renames.set(String(subject._id), { from: subject.name, to: subjName });
+          renames.set(idOf(subject), { from: subject.name, to: subjName });
           subject.name = subjName;
         }
       }
@@ -898,13 +967,13 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
       let facultyRef = null;
       if (email) {
         const hit = facultyByEmail.get(email);
-        if (hit) facultyRef = { id: hit._id, name: hit.name, isNew: false };
+        if (hit) facultyRef = { id: hit.id, name: hit.name, isNew: false };
         else notes.push({ line, message: `No account for "${email}" — period left unassigned` });
       } else if (facName) {
         facultyRef = resolveFaculty(facName);
-      } else if (subject?.faculty) {
-        const hit = faculty.find((f) => String(f._id) === String(subject.faculty));
-        if (hit) facultyRef = { id: hit._id, name: hit.name, isNew: false };
+      } else if (subject?.facultyId) {
+        const hit = faculty.find((f) => sameId(f, subject.facultyId));
+        if (hit) facultyRef = { id: hit.id, name: hit.name, isNew: false };
       }
 
       // One cohort, one class per period: a repeat is a duplicate cell, so the
@@ -933,9 +1002,9 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
       parsed.push({
         dayOfWeek: day,
         slot,
-        section: section?._id || null,
+        section: section?.id || null,
         sectionName: section?.name || 'All',
-        subject: subject?._id || null,
+        subject: subject?.id || null,
         pendingSubjectKey: pendingSubject ? `${normName(subjName)}|${sid}` : null,
         subjectCode: subject?.code || pendingSubject?.code || '',
         subjectName: subject?.name || pendingSubject?.name || '',
@@ -976,26 +1045,28 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
   // Correct any subject the file names more fully than the database does.
   for (const [id, r] of renames) {
     notes.push({ line: 0, message: `"${r.from}" renamed to "${r.to}" to match the file` });
-    if (create) await Subject.updateOne({ _id: id }, { $set: { name: r.to } });
+    if (create) await prisma.subject.update({ where: { id }, data: { name: r.to } });
   }
 
   const createdFaculty = new Map();
   for (const [key, f] of newFaculty) {
-    let doc = await User.findOne({ email: f.email });
+    let doc = await prisma.user.findUnique({ where: { email: f.email } });
     if (!doc) {
-      doc = await User.create({
-        name: f.name,
-        email: f.email,
-        password: 'faculty123',
-        role: 'faculty',
-        department: sections[0]?.department || 'Computer Science',
+      doc = await prisma.user.create({
+        data: {
+          name: f.name,
+          email: f.email,
+          password: await hashPassword('faculty123'),
+          role: 'faculty',
+          department: sections[0]?.department || 'Computer Science',
+        },
       });
-      await notify([doc._id], {
+      await notify([doc.id], {
         type: 'account:created',
         title: 'Welcome to Sitare University',
         message: `A faculty account was created for you from the timetable upload. Temporary password: faculty123 — please change it.`,
         link: '/',
-        createdBy: actor?._id || null,
+        createdBy: actor ? idOf(actor) : null,
       });
     }
     createdFaculty.set(key, doc);
@@ -1009,15 +1080,17 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
       facultyByName.get(normName(s.facultyName)) ||
       facultyByName.get(normName(String(s.facultyName).split(/[/,]/)[0]));
 
-    const doc = await Subject.create({
-      code: s.code,
-      name: s.name,
-      semester: Number(semester),
-      section: s.sectionId,
-      faculty: resolvedFaculty?._id || null,
-      department: sections[0]?.department || 'Computer Science',
-      plannedClasses: 30,
-      minAttendance: 75,
+    const doc = await prisma.subject.create({
+      data: {
+        code: s.code,
+        name: s.name,
+        semester: Number(semester),
+        sectionId: s.sectionId,
+        facultyId: resolvedFaculty ? idOf(resolvedFaculty) : null,
+        department: sections[0]?.department || 'Computer Science',
+        plannedClasses: 30,
+        minAttendance: 75,
+      },
     });
     createdSubjects.set(key, doc);
 
@@ -1027,15 +1100,15 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
      * otherwise students in the other sections would never appear on a
      * register.
      */
-    const studentFilter = s.wholeSemester
-      ? { role: 'student', isActive: true, section: { $in: sections.map((x) => x._id) } }
-      : { role: 'student', isActive: true, section: s.sectionId };
-    const students = await User.find(studentFilter).select('_id').lean();
+    const where = s.wholeSemester
+      ? { role: 'student', isActive: true, sectionId: { in: sections.map(idOf) } }
+      : { role: 'student', isActive: true, sectionId: s.sectionId };
+    const students = await prisma.user.findMany({ where, select: { id: true } });
     if (students.length) {
-      await Enrollment.insertMany(
-        students.map((st) => ({ student: st._id, subject: doc._id })),
-        { ordered: false }
-      ).catch(() => {});
+      await prisma.enrollment.createMany({
+        data: students.map((st) => ({ studentId: st.id, subjectId: doc.id })),
+        skipDuplicates: true,
+      });
     }
   }
 
@@ -1043,13 +1116,13 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
     if (p.pendingSubjectKey) {
       const doc = createdSubjects.get(p.pendingSubjectKey);
       if (doc) {
-        p.subject = doc._id;
-        if (!p.faculty) p.faculty = doc.faculty;
+        p.subject = doc.id;
+        if (!p.faculty) p.faculty = doc.facultyId;
       }
     }
     if (p.pendingFacultyKey) {
       const doc = createdFaculty.get(p.pendingFacultyKey);
-      if (doc) p.faculty = doc._id;
+      if (doc) p.faculty = doc.id;
     }
   }
 
@@ -1126,36 +1199,55 @@ export const uploadTimetable = asyncHandler(async (req, res) => {
 
   if (errors.length) throw ApiError.badRequest(errors[0].message, errors);
 
-  const timetable = await Timetable.create({
-    name,
-    semester,
-    effectiveFrom: toUTCDate(effectiveFrom),
-    effectiveFromKey: effectiveFrom,
-    uploadedBy: req.user._id,
-    status: 'draft',
-    // The period grid belongs to this timetable, straight from the file.
-    slots: upload.periods || [],
-    lunch: upload.lunch || null,
-    warnings: [...new Set(warnings)],
-    entryCount: parsed.length,
+  const lunch = upload.lunch || null;
+
+  /*
+   * The grid and its periods go in together. A timetable whose slot list did
+   * not make it would render every period as "Period 3" with no times, which
+   * looks like a parsing failure rather than a half-written record.
+   */
+  const timetable = await prisma.timetable.create({
+    data: {
+      name,
+      semester,
+      effectiveFrom: toUTCDate(effectiveFrom),
+      effectiveFromKey: effectiveFrom,
+      uploadedById: idOf(req.user),
+      status: 'draft',
+      // The period grid belongs to this timetable, straight from the file.
+      slots: {
+        create: (upload.periods || []).map((s) => ({
+          slot: s.slot,
+          label: s.label,
+          start: s.start,
+          end: s.end,
+        })),
+      },
+      lunchLabel: lunch?.label ?? null,
+      lunchStart: lunch?.start ?? null,
+      lunchEnd: lunch?.end ?? null,
+      lunchAfterSlot: lunch?.afterSlot ?? null,
+      warnings: [...new Set(warnings)],
+      entryCount: parsed.length,
+    },
   });
 
-  await TimetableEntry.insertMany(
-    parsed.map((p) => ({
-      timetable: timetable._id,
+  await prisma.timetableEntry.createMany({
+    data: parsed.map((p) => ({
+      timetableId: timetable.id,
       dayOfWeek: p.dayOfWeek,
       slot: p.slot,
-      section: p.section,
-      subject: p.subject,
-      faculty: p.faculty,
+      sectionId: p.section,
+      subjectId: p.subject,
+      facultyId: p.faculty,
       kind: p.kind,
       title: p.title,
-    }))
-  );
+    })),
+  });
 
-  if (publish) await publishTimetableById(timetable._id, req.user);
+  if (publish) await publishTimetableById(timetable.id, req.user);
 
-  const fresh = await Timetable.findById(timetable._id).lean();
+  const fresh = await prisma.timetable.findUnique({ where: { id: timetable.id } });
   const madeSubjects = created?.subjects || 0;
   const madeFaculty = created?.faculty || 0;
   const extra = [
@@ -1171,7 +1263,7 @@ export const uploadTimetable = asyncHandler(async (req, res) => {
       (publish ? 'Timetable published' : 'Timetable saved as draft') +
       (extra ? ` — ${extra} created` : ''),
     data: {
-      id: String(fresh._id),
+      id: fresh.id,
       name: fresh.name,
       status: fresh.status,
       entryCount: fresh.entryCount,
@@ -1183,32 +1275,39 @@ export const uploadTimetable = asyncHandler(async (req, res) => {
 
 /** Exactly one published grid per semester; the previous one is archived. */
 async function publishTimetableById(timetableId, actor) {
-  const timetable = await Timetable.findById(timetableId);
+  const timetable = await prisma.timetable.findUnique({ where: { id: timetableId } });
   if (!timetable) throw ApiError.notFound('Timetable not found');
 
-  await Timetable.updateMany(
-    { _id: { $ne: timetable._id }, semester: timetable.semester, status: 'published' },
-    { $set: { status: 'archived' } }
-  );
+  /*
+   * Archive-then-publish in one transaction. A unique index enforces one
+   * published grid per semester, so the two steps are not merely tidy — run
+   * apart, the publish would collide with the version it is replacing.
+   */
+  const [, published] = await prisma.$transaction([
+    prisma.timetable.updateMany({
+      where: { id: { not: timetable.id }, semester: timetable.semester, status: 'published' },
+      data: { status: 'archived' },
+    }),
+    prisma.timetable.update({
+      where: { id: timetable.id },
+      data: { status: 'published', publishedAt: new Date() },
+    }),
+  ]);
 
-  timetable.status = 'published';
-  timetable.publishedAt = new Date();
-  await timetable.save();
+  const audience = await prisma.user.findMany({
+    where: { isActive: true },
+    select: { id: true },
+  });
+  await notify(audience.map(idOf), {
+    type: 'timetable:published',
+    title: 'Timetable updated',
+    message: `"${published.name}" is now the live timetable for semester ${published.semester}.`,
+    link: '/timetable',
+    createdBy: idOf(actor),
+    meta: { timetableId: published.id },
+  });
 
-  const audience = await User.find({ isActive: true }).select('_id').lean();
-  await notify(
-    audience.map((u) => u._id),
-    {
-      type: 'timetable:published',
-      title: 'Timetable updated',
-      message: `"${timetable.name}" is now the live timetable for semester ${timetable.semester}.`,
-      link: '/timetable',
-      createdBy: actor._id,
-      meta: { timetableId: String(timetable._id) },
-    }
-  );
-
-  return timetable;
+  return published;
 }
 
 export const publishTimetable = asyncHandler(async (req, res) => {
@@ -1216,7 +1315,7 @@ export const publishTimetable = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: 'Timetable published to all staff and students',
-    data: { id: String(tt._id), status: tt.status },
+    data: { id: tt.id, status: tt.status },
   });
 });
 
@@ -1226,12 +1325,31 @@ export const publishTimetable = asyncHandler(async (req, res) => {
  * depends on it, because one-off changes attach to dates rather than the grid.
  */
 export const deleteTimetable = asyncHandler(async (req, res) => {
-  const tt = await Timetable.findById(req.params.timetableId);
+  const tt = await prisma.timetable.findUnique({ where: { id: req.params.timetableId } });
   if (!tt) throw ApiError.notFound('Timetable not found');
 
   const wasLive = tt.status === 'published';
-  const removed = (await TimetableEntry.deleteMany({ timetable: tt._id })).deletedCount;
-  await tt.deleteOne();
+  /*
+   * Everything hanging off the grid goes with it, in one transaction: swaps
+   * and hand-overs point at periods, and a foreign key will not let those
+   * outlive the rows they name.
+   */
+  const entries = await prisma.timetableEntry.findMany({
+    where: { timetableId: tt.id },
+    select: { id: true },
+  });
+  const entryIds = entries.map(idOf);
+  const [, , , , removedEntries] = await prisma.$transaction([
+    prisma.swapRequest.deleteMany({
+      where: { OR: [{ fromEntryId: { in: entryIds } }, { toEntryId: { in: entryIds } }] },
+    }),
+    prisma.attendanceDelegation.deleteMany({ where: { entryId: { in: entryIds } } }),
+    prisma.scheduleChange.deleteMany({ where: { timetableId: tt.id } }),
+    prisma.timetableSlot.deleteMany({ where: { timetableId: tt.id } }),
+    prisma.timetableEntry.deleteMany({ where: { timetableId: tt.id } }),
+    prisma.timetable.delete({ where: { id: tt.id } }),
+  ]);
+  const removed = removedEntries.count;
 
   res.json({
     success: true,

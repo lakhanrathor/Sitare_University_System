@@ -49,3 +49,14 @@ export function parseDay(input) {
   const hit = DAYS.find((d) => d.name.toLowerCase() === lower || d.short.toLowerCase() === lower);
   return hit ? hit.day : null;
 }
+
+/**
+ * What a period on the grid can be.
+ *
+ * 'office-hours' is the one that carries a rule rather than a label: a period
+ * of that kind is never a class, so it must never be offered for attendance
+ * and never generate a session. Kept here with the rest of the grid's shape so
+ * that request validation and the database layer can both read it without
+ * either importing the other.
+ */
+export const ENTRY_KINDS = ['lecture', 'office-hours', 'event'];

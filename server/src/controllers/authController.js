@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { OAuth2Client } from 'google-auth-library';
-import User from '../models/User.js';
+import { prisma } from '../config/prisma.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { signToken } from '../middleware/auth.js';
 import { auditLog } from '../utils/audit.js';
+import { idOf } from '../utils/ids.js';
+import { checkPassword, hashPassword, safeUser } from '../utils/user.js';
 import { env } from '../config/env.js';
 
 export const loginSchema = z.object({
@@ -30,24 +32,28 @@ export const changePasswordSchema = z.object({
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  const user = await User.findOne({ email: email.toLowerCase() })
-    .select('+password')
-    // Section is populated so the client gets its name on the very first load.
-    .populate('section', 'name semester');
-  if (!user || !(await user.comparePassword(password))) {
+  const user = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+    // The hash is omitted from every read by default; this is one of the two
+    // places that needs it, and says so.
+    omit: { password: false },
+    // Section is included so the client gets its name on the very first load.
+    include: { section: { select: { id: true, name: true, semester: true } } },
+  });
+  if (!user || !(await checkPassword(user, password))) {
     // Same message either way — confirming an email is registered is its own leak.
     auditLog('login_failed', { email: email.toLowerCase() });
     throw ApiError.unauthorized('Incorrect email or password');
   }
   if (!user.isActive) {
-    auditLog('login_blocked', { userId: String(user._id), reason: 'disabled' });
+    auditLog('login_blocked', { userId: idOf(user), reason: 'disabled' });
     throw ApiError.forbidden('This account has been disabled');
   }
 
-  auditLog('login_success', { userId: String(user._id), role: user.role });
+  auditLog('login_success', { userId: idOf(user), role: user.role });
   res.json({
     success: true,
-    data: { token: signToken(user), user: user.toSafeJSON() },
+    data: { token: signToken(user), user: safeUser(user) },
   });
 });
 
@@ -74,7 +80,10 @@ export async function resolveGoogleUser(payload) {
     throw ApiError.unauthorized('Sign in with your @sitare.org university account.');
   }
 
-  const user = await User.findOne({ email }).populate('section', 'name semester');
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { section: { select: { id: true, name: true, semester: true } } },
+  });
   if (!user) {
     // No account is created here — only an admin adds someone to the ERP.
     auditLog('google_login_failed', { reason: 'unregistered', email });
@@ -83,7 +92,7 @@ export async function resolveGoogleUser(payload) {
     );
   }
   if (!user.isActive) {
-    auditLog('google_login_failed', { reason: 'disabled', userId: String(user._id) });
+    auditLog('google_login_failed', { reason: 'disabled', userId: idOf(user) });
     throw ApiError.forbidden('This account has been disabled');
   }
 
@@ -94,13 +103,13 @@ export async function resolveGoogleUser(payload) {
    * authority (Google verified it above), so this is logged, not blocked.
    */
   if (!user.googleSub) {
+    await prisma.user.update({ where: { id: user.id }, data: { googleSub: payload.sub } });
     user.googleSub = payload.sub;
-    await user.save();
   } else if (payload.sub && user.googleSub !== payload.sub) {
-    auditLog('google_sub_mismatch', { userId: String(user._id) });
+    auditLog('google_sub_mismatch', { userId: idOf(user) });
   }
 
-  auditLog('google_login_success', { userId: String(user._id), role: user.role });
+  auditLog('google_login_success', { userId: idOf(user), role: user.role });
   return user;
 }
 
@@ -135,25 +144,35 @@ export const googleLogin = asyncHandler(async (req, res) => {
   const user = await resolveGoogleUser(payload);
   res.json({
     success: true,
-    data: { token: signToken(user), user: user.toSafeJSON() },
+    data: { token: signToken(user), user: safeUser(user) },
   });
 });
 
 export const me = asyncHandler(async (req, res) => {
-  res.json({ success: true, data: { user: req.user.toSafeJSON() } });
+  res.json({ success: true, data: { user: safeUser(req.user) } });
 });
 
 export const changePassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  const user = await User.findById(req.user._id).select('+password');
+  const user = await prisma.user.findUnique({
+    where: { id: idOf(req.user) },
+    omit: { password: false },
+  });
 
-  if (!(await user.comparePassword(currentPassword))) {
-    auditLog('password_change_failed', { userId: String(req.user._id) });
+  if (!(await checkPassword(user, currentPassword))) {
+    auditLog('password_change_failed', { userId: idOf(req.user) });
     throw ApiError.badRequest('Current password is incorrect');
   }
-  user.password = newPassword;
-  await user.save();
+  /*
+   * Hashed here rather than by a model hook — Prisma has none. hashPassword is
+   * the only place that decides the cost factor, so every password in the
+   * database was written the same way.
+   */
+  await prisma.user.update({
+    where: { id: idOf(user) },
+    data: { password: await hashPassword(newPassword) },
+  });
 
-  auditLog('password_changed', { userId: String(req.user._id) });
+  auditLog('password_changed', { userId: idOf(req.user) });
   res.json({ success: true, message: 'Password updated' });
 });

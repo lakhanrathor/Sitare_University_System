@@ -1,0 +1,810 @@
+// Sitare University ERP — relational schema.
+//
+// The whole data model in one file. Relationships between records are declared
+// here and enforced by the database, rather than being a convention the
+// application code has to remember.
+//
+// Three conventions run through the whole file, written down once here rather
+// than repeated on every model:
+//
+//  * Primary keys are UUIDv7 in a native `uuid` column. Native because 16 bytes
+//    with integer comparison beats 37 bytes with a collation-aware one on the
+//    large tables; v7 rather than v4 because v7 sorts by creation time, so
+//    inserts append to the end of the B-tree instead of scattering across it.
+//    Generating them client-side also lets the timetable importer build an
+//    entire object graph in memory and issue one createMany per table.
+//
+//  * Every foreign key carries an explicit @@index. Prisma does not create one
+//    on PostgreSQL, and without it each cascade and each purge fan-out becomes
+//    a sequential scan.
+//
+//  * A 'YYYY-MM-DD' dateKey string stays a string. It is compared with === and
+//    concatenated into composite map keys all through timetableService.js, so
+//    turning it into a Date there would silently stop schedule changes from
+//    applying. Where a Date column exists beside it, both are kept and a CHECK
+//    constraint holds them in agreement.
+
+generator client {
+  provider = "prisma-client-js"
+  // Explicit, because Prisma 7 no longer assumes it. This is the same
+  // place earlier versions defaulted to, so `import { PrismaClient } from
+  // "@prisma/client"` keeps working and nothing generated lands in src/.
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+//
+// Only the sets whose labels are already valid identifiers are native enums.
+// The hyphenated ones are text with a CHECK constraint instead, for the reason
+// recorded on TimetableEntry.kind — which is worth reading before changing any
+// of these.
+// ---------------------------------------------------------------------------
+
+/*
+ * Declared alphabetically on purpose. PostgreSQL orders an enum by the
+ * position a label was declared in, not by the label itself — so the order
+ * they are written in here *is* the order the People list comes back in.
+ */
+enum Role {
+  admin
+  faculty
+  student
+}
+
+enum AttendanceStatus {
+  present
+  absent
+}
+
+enum SessionStatus {
+  completed
+  cancelled
+}
+
+enum ChangeKind {
+  extra
+  move
+  cancel
+}
+
+enum TimetableStatus {
+  draft
+  published
+  archived
+}
+
+enum SwapStatus {
+  pending
+  accepted
+  approved
+  rejected
+  withdrawn
+  declined
+}
+
+enum LeaveSource {
+  student
+  upload
+  email
+}
+
+// ---------------------------------------------------------------------------
+// People and cohorts
+// ---------------------------------------------------------------------------
+
+model User {
+  id    String @id @default(uuid(7)) @db.Uuid
+  name  String
+  email String @unique
+
+  /// Never selected by default — the client is configured with
+  /// omit: { user: { password: true } }, so the hash is only ever read by a
+  /// query that asks for it by name. Only the two login paths do.
+  password String
+
+  role Role @default(student)
+
+  // Student-only
+  rollNumber String?  @unique @map("roll_number")
+  batch      String?
+  semester   Int?
+  sectionId  String?  @map("section_id") @db.Uuid
+  section    Section? @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  // Faculty-only
+  employeeId String? @unique @map("employee_id")
+
+  department String?
+  isActive   Boolean @default(true) @map("is_active")
+
+  /// Google's stable subject id, recorded on first Google sign-in. It says
+  /// *who signed in* and nothing more — role and section still come from the
+  /// columns above. Nullable and unique: SQL's NULL-distinct behaviour is
+  /// exactly the `sparse` index this replaces.
+  googleSub String? @unique @map("google_sub")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subjects             Subject[]
+  enrollments          Enrollment[]
+  sessionsTaught       ClassSession[]
+  attendance           Attendance[]           @relation("AttendanceStudent")
+  marksTaken           Attendance[]           @relation("AttendanceMarkedBy")
+  delegations          AttendanceDelegation[] @relation("DelegationFaculty")
+  delegationsAssigned  AttendanceDelegation[] @relation("DelegationAssignedBy")
+  timetablesUploaded   Timetable[]
+  timetableEntries     TimetableEntry[]
+  scheduleChangesMade  ScheduleChange[]       @relation("ChangeCreatedBy")
+  scheduleChangesOwned ScheduleChange[]       @relation("ChangeFaculty")
+  swapsRequested       SwapRequest[]          @relation("SwapRequestedBy")
+  swapsReceived        SwapRequest[]          @relation("SwapCounterparty")
+  swapsDecided         SwapRequest[]          @relation("SwapDecidedBy")
+  notes                Note[]
+  exams                ExamSchedule[]
+  leaveDocuments       LeaveDocument[]        @relation("LeaveStudent")
+  leaveUploads         LeaveDocument[]        @relation("LeaveUploadedBy")
+  notifications        Notification[]         @relation("NotificationUser")
+  notificationsCreated Notification[]         @relation("NotificationCreatedBy")
+
+  @@index([role])
+  @@index([sectionId])
+  @@map("users")
+}
+
+model Section {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// '' — not NULL — for an undivided semester. Do not "tidy" it to NULL: the
+  /// uniqueness below depends on it being a real value, and SQL does not treat
+  /// two NULLs as equal.
+  name       String  @default("")
+  semester   Int
+  department String  @default("Computer Science")
+  isActive   Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users            User[]
+  subjects         Subject[]
+  timetableEntries TimetableEntry[]
+  scheduleChanges  ScheduleChange[]
+  notes            Note[]
+  exams            ExamSchedule[]
+
+  @@unique([name, semester, department])
+  @@map("sections")
+}
+
+model Subject {
+  id         String  @id @default(uuid(7)) @db.Uuid
+  code       String
+  name       String
+  department String?
+  semester   Int
+  credits    Int     @default(3)
+
+  /// Null means the whole year takes it.
+  sectionId String?  @map("section_id") @db.Uuid
+  section   Section? @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  /// The subject's own lecturer, and the basis of faculty access. Nullable for
+  /// exactly one reason: purgeService leaves a subject standing but unassigned
+  /// when its lecturer's account is deleted, so an admin can hand it on.
+  facultyId String? @map("faculty_id") @db.Uuid
+  faculty   User?   @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+
+  /// Planning context only. The attendance denominator is the count of
+  /// completed sessions — never this.
+  plannedClasses Int @default(30) @map("planned_classes")
+  minAttendance  Int @default(75) @map("min_attendance")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  enrollments      Enrollment[]
+  sessions         ClassSession[]
+  attendance       Attendance[]
+  delegations      AttendanceDelegation[]
+  timetableEntries TimetableEntry[]
+  scheduleChanges  ScheduleChange[]
+  notes            Note[]
+  examPapers       ExamPaper[]
+
+  /// A course code is unique per section, not globally — Section A and Section
+  /// B each have their own ADSA. Because sectionId is nullable and SQL treats
+  /// NULLs as distinct, the migration recreates this index as
+  /// UNIQUE NULLS NOT DISTINCT, so two whole-year subjects still collide.
+  @@unique([code, sectionId])
+  @@index([code])
+  @@index([semester])
+  @@index([sectionId])
+  @@index([facultyId])
+  @@map("subjects")
+}
+
+model Enrollment {
+  id        String @id @default(uuid(7)) @db.Uuid
+  studentId String @map("student_id") @db.Uuid
+  subjectId String @map("subject_id") @db.Uuid
+
+  student User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([studentId, subjectId])
+  @@index([studentId])
+  @@index([subjectId])
+  @@map("enrollments")
+}
+
+// ---------------------------------------------------------------------------
+// Attendance
+// ---------------------------------------------------------------------------
+
+/// One actually-held class. The count of `completed` rows for a subject IS the
+/// attendance denominator; `cancelled` rows leave it entirely.
+model ClassSession {
+  id        String  @id @default(uuid(7)) @db.Uuid
+  subjectId String  @map("subject_id") @db.Uuid
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  /// SetNull, not Cascade: deleting a lecturer must not delete the classes
+  /// they held, and must not be blocked by them either.
+  facultyId String? @map("faculty_id") @db.Uuid
+  faculty   User?   @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+
+  /// Both kept deliberately — see the header note on dateKey.
+  date    DateTime @db.Date
+  dateKey String   @map("date_key")
+  slot    Int      @default(1)
+
+  topic  String        @default("")
+  status SessionStatus @default(completed)
+
+  /// Cached counters, refreshed whenever the register is saved.
+  presentCount Int @default(0) @map("present_count")
+  totalMarked  Int @default(0) @map("total_marked")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  attendance Attendance[]
+
+  @@unique([subjectId, dateKey, slot])
+  @@index([subjectId])
+  @@index([facultyId])
+  @@index([dateKey])
+  @@index([status])
+  @@map("class_sessions")
+}
+
+model Attendance {
+  id        String       @id @default(uuid(7)) @db.Uuid
+  sessionId String       @map("session_id") @db.Uuid
+  session   ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  subjectId String  @map("subject_id") @db.Uuid
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  studentId String @map("student_id") @db.Uuid
+  student   User   @relation("AttendanceStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  status AttendanceStatus
+
+  /// SetNull: Cascade here would delete every mark a departing lecturer ever
+  /// took — tearing holes in past registers — and Restrict would make a
+  /// lecturer who has ever marked anything undeletable.
+  markedById String? @map("marked_by_id") @db.Uuid
+  markedBy   User?   @relation("AttendanceMarkedBy", fields: [markedById], references: [id], onDelete: SetNull)
+
+  remark String @default("")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([sessionId, studentId])
+  @@index([sessionId])
+  @@index([subjectId])
+  @@index([studentId])
+  @@index([studentId, subjectId])
+  @@index([markedById])
+  @@map("attendance")
+}
+
+/// "This lecturer marks this one class." Keyed to a date, not to the recurring
+/// period: next week the register belongs to its own lecturer again.
+model AttendanceDelegation {
+  id        String  @id @default(uuid(7)) @db.Uuid
+  subjectId String  @map("subject_id") @db.Uuid
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  dateKey String @map("date_key")
+  slot    Int
+
+  facultyId String @map("faculty_id") @db.Uuid
+  faculty   User   @relation("DelegationFaculty", fields: [facultyId], references: [id], onDelete: Cascade)
+
+  /// The grid cell it came from. Null when the period carries no subject of
+  /// its own — an event whose register an admin pointed at a subject for this
+  /// date only.
+  entryId String?         @map("entry_id") @db.Uuid
+  entry   TimetableEntry? @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  assignedById String? @map("assigned_by_id") @db.Uuid
+  assignedBy   User?   @relation("DelegationAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  note String @default("")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([subjectId, dateKey, slot])
+  @@index([subjectId])
+  @@index([facultyId])
+  @@index([entryId])
+  @@index([assignedById])
+  @@index([dateKey])
+  @@map("attendance_delegations")
+}
+
+// ---------------------------------------------------------------------------
+// Timetable
+// ---------------------------------------------------------------------------
+
+model Timetable {
+  id         String @id @default(uuid(7)) @db.Uuid
+  name       String
+  semester   Int
+  department String @default("Computer Science")
+
+  effectiveFrom    DateTime @map("effective_from") @db.Date
+  effectiveFromKey String   @map("effective_from_key")
+
+  status      TimetableStatus @default(draft)
+  publishedAt DateTime?       @map("published_at")
+
+  uploadedById String? @map("uploaded_by_id") @db.Uuid
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  /// Four inline columns replace the single embedded `lunch` object, with a
+  /// CHECK in the migration keeping them all-set-or-all-null.
+  lunchLabel     String? @map("lunch_label")
+  lunchStart     String? @map("lunch_start")
+  lunchEnd       String? @map("lunch_end")
+  lunchAfterSlot Int?    @map("lunch_after_slot")
+
+  /// Parser warnings shown to the admin before publishing — a list that is
+  /// only ever read whole, so a native array is the honest shape.
+  warnings   String[]
+  entryCount Int      @default(0) @map("entry_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  slots           TimetableSlot[]
+  entries         TimetableEntry[]
+  scheduleChanges ScheduleChange[]
+
+  @@index([semester])
+  @@index([status])
+  @@index([uploadedById])
+  @@map("timetables")
+}
+
+/// The period grid of one timetable — was `Timetable.slots[]`.
+model TimetableSlot {
+  timetableId String    @map("timetable_id") @db.Uuid
+  timetable   Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+
+  slot  Int
+  label String
+  start String
+  end   String
+
+  @@id([timetableId, slot])
+  @@map("timetable_slots")
+}
+
+model TimetableEntry {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  timetableId String    @map("timetable_id") @db.Uuid
+  timetable   Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+
+  dayOfWeek Int @map("day_of_week")
+  slot      Int
+
+  /// Null for a period the whole year attends.
+  sectionId String?  @map("section_id") @db.Uuid
+  section   Section? @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  subjectId String?  @map("subject_id") @db.Uuid
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  /// The per-period lecturer override — distinct from Subject.faculty, which
+  /// owns the subject. Two lecturers genuinely splitting a subject by weekday
+  /// is expressed here.
+  facultyId String? @map("faculty_id") @db.Uuid
+  faculty   User?   @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+
+  /*
+   * Text with a CHECK rather than a native enum, and the reason is worth
+   * keeping: a SQL enum label may contain a hyphen but a Prisma identifier may
+   * not, so 'office-hours' would have to be spelled officeHours and @map'd —
+   * and the client then hands JavaScript the *name*, not the value. Every guard
+   * in this codebase compares against 'office-hours', so all of them would
+   * silently stop matching and attendance could be recorded against an
+   * office-hours period. As text the value reads back exactly as it is stored
+   * and exactly as the API sends it.
+   */
+  kind  String @default("lecture")
+  title String @default("")
+  room  String @default("")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  delegations     AttendanceDelegation[]
+  scheduleChanges ScheduleChange[]
+  swapsFrom       SwapRequest[]         @relation("SwapFromEntry")
+  swapsTo         SwapRequest[]         @relation("SwapToEntry")
+
+  /// One cohort cannot be in two places in one period. Recreated as
+  /// UNIQUE NULLS NOT DISTINCT in the migration, so the section-less rows of a
+  /// whole-year grid still collide with each other.
+  @@unique([timetableId, dayOfWeek, slot, sectionId])
+  @@index([timetableId])
+  @@index([dayOfWeek])
+  @@index([sectionId])
+  @@index([subjectId])
+  @@index([facultyId])
+  @@map("timetable_entries")
+}
+
+/// A date-specific deviation from the weekly grid: extra | move | cancel.
+/// A swap is stored as two linked `move` rows, so the resolver only ever has
+/// to understand these three shapes.
+model ScheduleChange {
+  id   String     @id @default(uuid(7)) @db.Uuid
+  kind ChangeKind
+
+  /// Never absent in practice. Without it a section-less booking matches every
+  /// semester's query and leaks a class across cohorts — this bit the project
+  /// once.
+  timetableId String?    @map("timetable_id") @db.Uuid
+  timetable   Timetable? @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+
+  date    DateTime @db.Date
+  dateKey String   @map("date_key")
+
+  entryId  String?         @map("entry_id") @db.Uuid
+  entry    TimetableEntry? @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  fromSlot Int?            @map("from_slot")
+
+  toDate    DateTime? @map("to_date") @db.Date
+  toDateKey String?   @map("to_date_key")
+  toSlot    Int?      @map("to_slot")
+
+  sectionId String?  @map("section_id") @db.Uuid
+  section   Section? @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  subjectId String?  @map("subject_id") @db.Uuid
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  facultyId String? @map("faculty_id") @db.Uuid
+  faculty   User?   @relation("ChangeFaculty", fields: [facultyId], references: [id], onDelete: SetNull)
+
+  /// The slot an `extra` claims.
+  slot Int?
+
+  /// Same values as TimetableEntry.kind, same CHECK, same reasoning.
+  kindOfClass String @default("lecture") @map("kind_of_class")
+
+  title  String @default("")
+  room   String @default("")
+  reason String @default("")
+
+  createdById String? @map("created_by_id") @db.Uuid
+  createdBy   User?   @relation("ChangeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  swapRequestId String?      @map("swap_request_id") @db.Uuid
+  swapRequest   SwapRequest? @relation(fields: [swapRequestId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([kind])
+  @@index([timetableId])
+  @@index([dateKey])
+  @@index([toDateKey])
+  @@index([entryId])
+  @@index([sectionId])
+  @@index([subjectId])
+  @@index([facultyId])
+  @@index([createdById])
+  @@index([swapRequestId])
+  @@index([dateKey, sectionId])
+  @@index([toDateKey, sectionId])
+  @@map("schedule_changes")
+}
+
+model SwapRequest {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  requestedById String @map("requested_by_id") @db.Uuid
+  requestedBy   User   @relation("SwapRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+
+  counterpartyId String @map("counterparty_id") @db.Uuid
+  counterparty   User   @relation("SwapCounterparty", fields: [counterpartyId], references: [id], onDelete: Cascade)
+
+  fromEntryId String         @map("from_entry_id") @db.Uuid
+  fromEntry   TimetableEntry @relation("SwapFromEntry", fields: [fromEntryId], references: [id], onDelete: Cascade)
+  fromDateKey String         @map("from_date_key")
+  fromSlot    Int            @map("from_slot")
+
+  toEntryId String         @map("to_entry_id") @db.Uuid
+  toEntry   TimetableEntry @relation("SwapToEntry", fields: [toEntryId], references: [id], onDelete: Cascade)
+  toDateKey String         @map("to_date_key")
+  toSlot    Int            @map("to_slot")
+
+  reason String     @default("")
+  status SwapStatus @default(pending)
+
+  acceptedAt DateTime? @map("accepted_at")
+
+  decidedById  String?   @map("decided_by_id") @db.Uuid
+  decidedBy    User?     @relation("SwapDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt    DateTime? @map("decided_at")
+  decisionNote String    @default("") @map("decision_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  scheduleChanges ScheduleChange[]
+
+  @@index([requestedById])
+  @@index([counterpartyId])
+  @@index([fromEntryId])
+  @@index([toEntryId])
+  @@index([decidedById])
+  @@index([status])
+  @@map("swap_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Material, exams and leave
+// ---------------------------------------------------------------------------
+
+/// The bytes of an uploaded file, in their own table.
+///
+/// Separate from `attachments` because Prisma selects every scalar column by
+/// default: a bytea beside the metadata would stream every file in the table
+/// into Node on any findMany. Nothing but an explicit download reads this.
+model File {
+  id          String @id @default(uuid(7)) @db.Uuid
+  data        Bytes
+  filename    String
+  contentType String @map("content_type")
+  size        Int
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  attachments Attachment[]
+
+  @@map("files")
+}
+
+/// One attachment on a note, an exam schedule or a leave application.
+///
+/// The three near-identical embedded arrays become one table with an exclusive
+/// arc: exactly one owner column is set, enforced by a CHECK in the migration.
+/// A polymorphic owner_type/owner_id pair could not carry a foreign key at all,
+/// and it is the foreign key that makes ON DELETE CASCADE real here.
+model Attachment {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  fileId String @map("file_id") @db.Uuid
+  file   File   @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  /// Denormalised exactly as the subdocument had them, so listing attachments
+  /// never has to touch the blob table.
+  filename    String
+  contentType String @default("application/octet-stream") @map("content_type")
+  size        Int    @default(0)
+
+  noteId String? @map("note_id") @db.Uuid
+  note   Note?   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  examId String?       @map("exam_id") @db.Uuid
+  exam   ExamSchedule? @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  leaveId String?        @map("leave_id") @db.Uuid
+  leave   LeaveDocument? @relation(fields: [leaveId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([fileId])
+  @@index([noteId])
+  @@index([examId])
+  @@index([leaveId])
+  @@map("attachments")
+}
+
+model Note {
+  id          String @id @default(uuid(7)) @db.Uuid
+  title       String
+  description String @default("")
+
+  semester Int
+
+  /// Null means every section of that year can see it — which is why this FK
+  /// is Restrict and not SetNull: a cascade that nulled it would silently
+  /// widen who can read the note.
+  sectionId String?  @map("section_id") @db.Uuid
+  section   Section? @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  subjectId String?  @map("subject_id") @db.Uuid
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  uploadedById String? @map("uploaded_by_id") @db.Uuid
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  attachments Attachment[]
+
+  @@index([semester])
+  @@index([sectionId])
+  @@index([subjectId])
+  @@index([uploadedById])
+  @@index([semester, sectionId, createdAt(sort: Desc)])
+  @@map("notes")
+}
+
+model ExamSchedule {
+  id       String   @id @default(uuid(7)) @db.Uuid
+  title    String
+  /* Text with a CHECK — see the note on TimetableEntry.kind. */
+  examType String @default("end-term") @map("exam_type")
+
+  semester Int
+
+  /// Null means every cohort of that year sits the same schedule. Restrict for
+  /// the same reason as Note.sectionId.
+  sectionId String?  @map("section_id") @db.Uuid
+  section   Section? @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  instructions String @default("")
+
+  publishedById String? @map("published_by_id") @db.Uuid
+  publishedBy   User?   @relation(fields: [publishedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  papers      ExamPaper[]
+  attachments Attachment[]
+
+  @@index([semester])
+  @@index([sectionId])
+  @@index([publishedById])
+  @@index([examType])
+  @@index([semester, sectionId, createdAt(sort: Desc)])
+  @@map("exam_schedules")
+}
+
+/// One dated paper on an exam schedule — was an embedded subdocument, but its
+/// id is handed to the client and its subject is a real reference, so it earns
+/// a table.
+model ExamPaper {
+  id     String       @id @default(uuid(7)) @db.Uuid
+  examId String       @map("exam_id") @db.Uuid
+  exam   ExamSchedule @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  /// The subject, when it is one the system knows.
+  subjectId String?  @map("subject_id") @db.Uuid
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  /// What the sheet calls it — used when there is no matching subject.
+  label String @default("")
+
+  /// No Date column beside it: nothing compares this as a date.
+  dateKey   String @map("date_key")
+  startTime String @default("") @map("start_time")
+  endTime   String @default("") @map("end_time")
+  room      String @default("")
+
+  @@index([examId])
+  @@index([subjectId])
+  @@map("exam_papers")
+}
+
+model LeaveDocument {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  studentId String @map("student_id") @db.Uuid
+  student   User   @relation("LeaveStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  /// When the student sent it, not when it was filed — an application
+  /// forwarded in November is still evidence about September, so the folder is
+  /// ordered by this and never by createdAt.
+  sentAt DateTime @map("sent_at")
+
+  regarding String
+  body      String @default("")
+
+  leaveFrom DateTime? @map("leave_from") @db.Date
+  leaveTo   DateTime? @map("leave_to") @db.Date
+
+  source LeaveSource @default(student)
+
+  /// Filled in only by the inbox reader.
+  fromAddress String @default("") @map("from_address")
+
+  /// Plain nullable unique: SQL treating NULLs as distinct is exactly the
+  /// partialFilterExpression this replaces, so manual uploads (which have no
+  /// Message-ID) never collide.
+  messageId String? @unique @map("message_id")
+
+  uploadedById String? @map("uploaded_by_id") @db.Uuid
+  uploadedBy   User?   @relation("LeaveUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  attachments Attachment[]
+
+  @@index([studentId])
+  @@index([sentAt])
+  @@index([source])
+  @@index([uploadedById])
+  @@index([studentId, sentAt(sort: Desc)])
+  @@map("leave_documents")
+}
+
+model Notification {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation("NotificationUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Deliberately free text, not an enum: new notification types arrive with a
+  /// feature and carry no schema meaning.
+  type    String
+  title   String
+  message String
+  link    String @default("")
+
+  /// Small, open-ended payload (the ids the client uses to build a link).
+  /// jsonb rather than columns because nothing queries its shape.
+  meta Json @default("{}")
+
+  requiresAction Boolean @default(false) @map("requires_action")
+  read           Boolean @default(false)
+
+  createdById String? @map("created_by_id") @db.Uuid
+  createdBy   User?   @relation("NotificationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdById])
+  @@index([userId, read, createdAt(sort: Desc)])
+  @@map("notifications")
+}

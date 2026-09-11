@@ -1,15 +1,16 @@
-import Notification from '../models/Notification.js';
+import { prisma } from '../config/prisma.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { idOf } from '../utils/ids.js';
 
 export const listNotifications = asyncHandler(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 30, 100);
-  const filter = { user: req.user._id };
-  if (req.query.unread === 'true') filter.read = false;
+  const where = { userId: idOf(req.user) };
+  if (req.query.unread === 'true') where.read = false;
 
   const [items, unread] = await Promise.all([
-    Notification.find(filter).sort({ createdAt: -1 }).limit(limit).lean(),
-    Notification.countDocuments({ user: req.user._id, read: false }),
+    prisma.notification.findMany({ where, orderBy: { createdAt: 'desc' }, take: limit }),
+    prisma.notification.count({ where: { userId: idOf(req.user), read: false } }),
   ]);
 
   res.json({
@@ -17,7 +18,7 @@ export const listNotifications = asyncHandler(async (req, res) => {
     data: {
       unread,
       items: items.map((n) => ({
-        id: String(n._id),
+        id: n.id,
         type: n.type,
         title: n.title,
         message: n.message,
@@ -31,14 +32,18 @@ export const listNotifications = asyncHandler(async (req, res) => {
 });
 
 export const markRead = asyncHandler(async (req, res) => {
-  const n = await Notification.findOne({ _id: req.params.id, user: req.user._id });
+  const n = await prisma.notification.findFirst({
+    where: { id: req.params.id, userId: idOf(req.user) },
+  });
   if (!n) throw ApiError.notFound('Notification not found');
-  n.read = true;
-  await n.save();
+  await prisma.notification.update({ where: { id: n.id }, data: { read: true } });
   res.json({ success: true, message: 'Marked as read' });
 });
 
 export const markAllRead = asyncHandler(async (req, res) => {
-  await Notification.updateMany({ user: req.user._id, read: false }, { $set: { read: true } });
+  await prisma.notification.updateMany({
+    where: { userId: idOf(req.user), read: false },
+    data: { read: true },
+  });
   res.json({ success: true, message: 'All notifications marked as read' });
 });

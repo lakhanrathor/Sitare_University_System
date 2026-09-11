@@ -7,7 +7,7 @@ just to keep the app running.
 | | Dev | Staging | Production |
 | --- | --- | --- | --- |
 | Where | Your laptop | Render (2 services) | Render/host, owned by whoever runs the institution's deployment |
-| Database | Local MongoDB | Its own Atlas cluster, synthetic data | Its own Atlas cluster, real data |
+| Database | Local PostgreSQL | Its own managed Postgres, synthetic data | Its own managed Postgres, real data |
 | Data | Synthetic (`npm run seed`) | Synthetic (same seed script) | Real |
 | Who holds the DB credential | You | You | The institution — not the developer |
 | Git branch | any local branch | `staging` | `main` |
@@ -26,7 +26,7 @@ feature work → staging (branch) → main (branch)
 - **`staging`** is where you do ongoing work and see it running live before promoting
   it. Both current Render services (API + client) track this branch.
 - **Dev** never needs a branch of its own — it isn't deployed anywhere, it's just
-  `npm run dev` against local MongoDB.
+  `npm run dev` against a local PostgreSQL.
 
 Promoting staging to production is a normal merge:
 ```bash
@@ -46,13 +46,58 @@ Two Render services, both tracking the `staging` branch with auto-deploy on push
 
 Environment variables (set in each service's Render dashboard, never committed):
 
-**API service**: `NODE_ENV=production`, `MONGO_URI` (staging Atlas cluster),
+**API service**: `NODE_ENV=production`, `DATABASE_URL` (the staging Postgres instance),
 `JWT_SECRET` (a value generated for staging only — not shared with local dev or
 production), `JWT_EXPIRES_IN`, `CLIENT_ORIGIN` (the client service's URL, for CORS
 and Socket.io), `GOOGLE_CLIENT_ID`.
 
 **Client service**: `VITE_API_URL` (the API service's URL — see below),
 `VITE_GOOGLE_CLIENT_ID`.
+
+### Moving an existing service from MongoDB to PostgreSQL
+
+Swapping `DATABASE_URL` in for `MONGO_URI` is not sufficient on its own — two
+other things have to be true first, and both are easy to miss because the
+service still starts and still answers `/api/health` without them.
+
+**Create the database.** Render Dashboard → New → Postgres.
+
+- **Version 16** (15 or newer is required: the schema uses `NULLS NOT DISTINCT`,
+  and two unique indexes silently stop enforcing anything without it).
+- **Same region as the API service.** They talk on every request; putting them
+  in different regions means every query crosses the internet.
+- Free instances are deleted about a month after creation, and everything in
+  them goes too. Fine for staging, whose data is synthetic and re-creatable.
+  Production needs a paid instance with backups on.
+
+**Point the API at it.** In the API service → Environment:
+
+- add `DATABASE_URL`, set to the database's **Internal** connection string —
+  internal keeps the traffic inside Render's network and needs no public access
+- delete `MONGO_URI`; nothing reads it, and a stale credential in an
+  environment panel is still a credential
+
+**Set the build command** to `npm install && npm run build`.
+
+This is the step that is easy to skip and expensive to skip. `npm run build`
+runs `prisma generate` (without it `@prisma/client` throws on the first query)
+and then `prisma migrate deploy`, which creates the schema. Miss it and the
+service deploys, reports healthy, and fails every real request — which reads as
+the application being broken rather than the database being empty. Running it
+in the build also means a failed migration fails the build, and the previous
+version keeps serving.
+
+`prisma` is a runtime dependency rather than a dev one for the same reason:
+`NODE_ENV=production` makes `npm install` skip devDependencies, so the CLI has
+to be somewhere that survives that.
+
+**Then merge to the branch the service tracks** and let it deploy.
+
+**Create the first admin.** The new database is empty and nobody can sign in
+until one account exists — see *Bootstrapping the first admin* below.
+
+A deploy is a git push from then on: the build command reapplies any new
+migrations before the new code serves its first request.
 
 ### The client static site needs one rewrite rule
 
@@ -92,24 +137,35 @@ same-origin — local dev is unaffected by this existing at all.
 
 ### Seeding a database that isn't local
 
-`npm run seed` reads `MONGO_URI` from the environment exactly like the app does.
+`npm run seed` reads `DATABASE_URL` from the environment exactly like the app does.
 Override it for one command rather than editing `server/.env` back and forth:
 
 ```bash
 # Git Bash / macOS / Linux
-MONGO_URI="mongodb+srv://...staging-cluster.../sitare_erp_staging" node src/seed/seed.js
+DATABASE_URL="postgresql://...staging-host.../sitare_erp_staging" node src/seed/seed.js
 ```
 ```powershell
 # PowerShell
-$env:MONGO_URI="mongodb+srv://...staging-cluster.../sitare_erp_staging"; node src/seed/seed.js
+$env:DATABASE_URL="postgresql://...staging-host.../sitare_erp_staging"; node src/seed/seed.js
 ```
+
+Schema changes reach a deployed database the same way, and must run **before** the
+new code serves traffic:
+
+```bash
+DATABASE_URL="postgresql://...staging-host.../sitare_erp_staging" npx prisma migrate deploy
+```
+
+`migrate deploy` only applies migrations that are already committed — it never
+generates one and never resets anything, which is what makes it the right command
+for an environment holding data.
 
 This works because `dotenv` (loading `server/.env`) never overrides a variable
 already set in the shell, so your local `.env` — and local dev — is untouched.
 
 ### `seed.js` refuses to run against production
 
-`seed.js` wipes every collection and creates the well-known `admin@sitare.org` /
+`seed.js` empties every table and creates the well-known `admin@sitare.org` /
 `admin123` account — appropriate for dev/staging, never for a real deployment.
 It checks `NODE_ENV` and exits immediately with an error if it is `production`,
 rather than relying on everyone remembering not to run it there. This is why a
@@ -118,18 +174,18 @@ needs to be, for other reasons — see the API service's env vars) — that same
 setting is what makes this guard effective. Bootstrapping a real admin account
 uses `create-admin.mjs` instead (see below), which never deletes anything.
 
-### A note on the MongoDB Atlas IP allowlist
+### A note on network access
 
-Render's free tier doesn't offer a fixed outbound IP, so the staging Atlas cluster's
-Network Access list allows `0.0.0.0/0` (anywhere). That's an acceptable tradeoff for
-a cluster that only ever holds synthetic data. **Production must not do this** — its
-allowlist should be scoped to the actual hosting platform's real IP range (or a
-paid static-IP add-on), configured by whoever controls production, not by a
-developer working from their own laptop.
+Render's free tier doesn't offer a fixed outbound IP, so a staging database reachable
+from anywhere is an acceptable tradeoff for an instance that only ever holds synthetic
+data. **Production must not do this** — it should sit on a private network with the
+API service, or have its access scoped to the hosting platform's real IP range,
+configured by whoever controls production rather than by a developer working from
+their own laptop.
 
 ## Production — intended setup (not this developer's to configure)
 
-Production should be a separate Atlas cluster and a separate deployment, both
+Production should be a separate PostgreSQL instance and a separate deployment, both
 created and held by the institution (or whoever officially owns the deployment) —
 not by the student developer. The developer's ongoing access should be limited to:
 
@@ -138,23 +194,45 @@ not by the student developer. The developer's ongoing access should be limited t
 - **Never** the production database credential, and never the production `JWT_SECRET`.
 
 Handoff mechanics that make this actually true, not just a policy:
-- The production Atlas project should not list the developer as a member (or only
-  with a role that can't view connection strings).
+- The production database project should not list the developer as a member (or only
+  with a role that cannot view connection strings).
 - Production secrets are pasted into the hosting platform's environment-variable
   panel by whoever owns production — most platforms (Render included) mask a saved
   env var afterward; nobody can read it back through the UI, only overwrite it.
 - On handoff, rotate the production DB password and `JWT_SECRET`. Anything the
   developer may have seen during earlier testing stops working immediately.
 
-### Bootstrapping the first production admin
+### Bootstrapping the first admin
 
-A freshly created production database has zero users, and every account in this
-app is normally created by an existing admin through Admin → People — so nobody
-can log in at all until one admin exists. Whoever holds production runs, once:
+A freshly created database has zero users, and every account in this app is
+normally created by an existing admin through Admin → People — so nobody can
+sign in at all until one account exists. Whoever holds that environment runs it
+once, from `server/`:
 
 ```bash
-MONGO_URI="the-production-connection-string" node create-admin.mjs "Real Name" "real-email@sitare.org" "a-real-password-they-choose"
+node create-admin.mjs "Real Name" "real-email@sitare.org" "a-password-they-choose"
 ```
+
+The schema is already there: the service's build command ran `prisma migrate
+deploy` on its way up.
+
+Where to run it matters more than it looks. If the service's plan has a **Shell**
+tab, run it there — the service already holds `DATABASE_URL` in its environment,
+so the command above works unchanged and the credential never leaves Render.
+That is the right way to do it for production, because nobody has to hold a copy
+locally or paste one anywhere it might be remembered.
+
+Without a Shell, it has to be run locally with the database's **External**
+connection string in front of it:
+
+```bash
+DATABASE_URL="the-external-connection-string" node create-admin.mjs "Real Name" "real-email@sitare.org" "a-password"
+```
+
+For staging that is unremarkable — it is your own database of synthetic data.
+For production it means somebody has handled the production credential, so it
+should be whoever owns production, never the developer, and the password should
+be rotated afterwards if there is any doubt about where it has been.
 
 This is the only sanctioned way to get a first admin into production. It never
 deletes anything and refuses if the email already exists, so it's safe even if

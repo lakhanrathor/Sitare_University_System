@@ -1,12 +1,13 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
-import User from '../models/User.js';
+import { prisma } from '../config/prisma.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { auditLog } from '../utils/audit.js';
+import { idOf, isUuid } from '../utils/ids.js';
 
 export function signToken(user) {
-  return jwt.sign({ sub: String(user._id), role: user.role }, env.jwtSecret, {
+  return jwt.sign({ sub: idOf(user), role: user.role }, env.jwtSecret, {
     expiresIn: env.jwtExpiresIn,
   });
 }
@@ -32,8 +33,21 @@ export const protect = asyncHandler(async (req, _res, next) => {
     throw ApiError.unauthorized('Session expired or invalid. Please sign in again.');
   }
 
-  // Section is populated because nearly every timetable view needs its name.
-  const user = await User.findById(payload.sub).populate('section', 'name semester');
+  /*
+   * A subject that is not a uuid cannot name a row, and asking anyway raises
+   * rather than missing. That is a token this server did not issue, or one
+   * from before the accounts it refers to existed — either way, a dead session.
+   */
+  if (!isUuid(payload.sub)) {
+    auditLog('auth_failed', { reason: 'malformed_token_subject', path: req.originalUrl });
+    throw ApiError.unauthorized('Session expired or invalid. Please sign in again.');
+  }
+
+  // Section is included because nearly every timetable view needs its name.
+  const user = await prisma.user.findUnique({
+    where: { id: payload.sub },
+    include: { section: { select: { id: true, name: true, semester: true } } },
+  });
   if (!user || !user.isActive) {
     auditLog('auth_failed', { reason: 'disabled_or_missing_account', userId: payload.sub });
     throw ApiError.unauthorized('Account not found or disabled');
@@ -50,7 +64,7 @@ export const authorize =
     if (!req.user) return next(ApiError.unauthorized());
     if (!roles.includes(req.user.role)) {
       auditLog('authorization_denied', {
-        userId: String(req.user._id),
+        userId: idOf(req.user),
         role: req.user.role,
         required: roles,
         path: req.originalUrl,

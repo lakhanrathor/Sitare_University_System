@@ -1,7 +1,8 @@
 import { Server } from 'socket.io';
 import { env } from '../config/env.js';
 import { verifyToken } from '../middleware/auth.js';
-import User from '../models/User.js';
+import { prisma } from '../config/prisma.js';
+import { idOf, isUuid } from '../utils/ids.js';
 
 let io = null;
 
@@ -22,9 +23,15 @@ export function initSocket(httpServer) {
       const token = socket.handshake.auth?.token;
       if (!token) return next(new Error('Authentication token missing'));
       const payload = verifyToken(token);
-      const user = await User.findById(payload.sub).select('name role isActive');
+      // A subject that is not a uuid cannot name a row — refused as a dead
+      // session rather than allowed to raise.
+      if (!isUuid(payload.sub)) return next(new Error('Invalid or expired token'));
+      const user = await prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, name: true, role: true, isActive: true },
+      });
       if (!user || !user.isActive) return next(new Error('Account not found or disabled'));
-      socket.user = { id: String(user._id), role: user.role, name: user.name };
+      socket.user = { id: user.id, role: user.role, name: user.name };
       next();
     } catch {
       next(new Error('Invalid or expired token'));
@@ -58,11 +65,11 @@ export function getIO() {
 /** Push an event to a set of user ids (students affected by a change). */
 export function emitToUsers(userIds, event, payload) {
   if (!io) return;
-  const unique = [...new Set(userIds.map(String))];
+  const unique = [...new Set(userIds.map(idOf))];
   unique.forEach((uid) => io.to(rooms.user(uid)).emit(event, payload));
 }
 
 export function emitToSubject(subjectId, event, payload) {
   if (!io) return;
-  io.to(rooms.subject(String(subjectId))).emit(event, payload);
+  io.to(rooms.subject(idOf(subjectId))).emit(event, payload);
 }

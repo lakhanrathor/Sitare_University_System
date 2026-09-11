@@ -36,7 +36,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 const serverUnreachable = (res, payload) => res.status >= 500 && !payload;
 
-// Comfortably outlasts a dev-server restart: Mongo reconnect plus Express and
+// Comfortably outlasts a dev-server restart: the database reconnect plus Express and
 // socket.io coming back up has taken several seconds under real load.
 const RETRY_DELAYS_MS = [800, 1500, 2500];
 

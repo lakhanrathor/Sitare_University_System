@@ -1,7 +1,7 @@
 # Sitare University ERP
 
 Real-time platform replacing the manual attendance register and timetable.
-Stack: **React + Vite + Tailwind** · **Node.js + Express + MongoDB** · **Socket.io**
+Stack: **React + Vite + Tailwind** · **Node.js + Express + PostgreSQL** · **Socket.io**
 
 Modules built so far:
 
@@ -37,13 +37,15 @@ Supporting behaviour:
 
 ## Running locally
 
-Requires Node 18+ and a local MongoDB on `mongodb://127.0.0.1:27017`.
+Requires Node 18+ and PostgreSQL 15 or newer at `DATABASE_URL` — `docker compose up -d db`
+at the repo root starts one.
 
 ```bash
 # Terminal 1 — API on :5000
 cd server
 npm install
-npm run seed      # resets the DB and creates one admin account; safe to re-run
+npx prisma migrate deploy   # create the schema
+npm run seed                # resets the DB and creates one admin account; safe to re-run
 npm start
 
 # Terminal 2 — UI on :5173

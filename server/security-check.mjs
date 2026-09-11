@@ -112,8 +112,18 @@ console.log('\nRole-based access control');
     const [facultyA, facultyB] = twoFaculty;
     // A's subjects should never include something owned by B, and vice versa.
     const aSubjects = (await call('/subjects', {}, facultyA.token)).json.data;
-    const bOwnsAny = aSubjects.some((s) => s.faculty?.id === facultyB.user.id);
-    report("faculty A's subject list contains none of faculty B's subjects", !bOwnsAny);
+    /*
+     * An empty list satisfies "contains none of B's" trivially. That is the
+     * same silent pass this file was fixed to stop emitting: say plainly that
+     * there was nothing to compare rather than printing ok for a lecturer who
+     * appears to teach nothing.
+     */
+    if (!aSubjects.length) {
+      console.log('  skip  (faculty A teaches no subjects — nothing to compare)');
+    } else {
+      const bOwnsAny = aSubjects.some((s) => s.faculty?.id === facultyB.user.id);
+      report("faculty A's subject list contains none of faculty B's subjects", !bOwnsAny);
+    }
   } else {
     console.log('  skip  (fewer than two faculty demo logins available)');
   }
@@ -131,6 +141,20 @@ console.log('\nIDOR / resource-level authorization');
   ).filter(Boolean);
 
   const notes = (await call('/notes', {}, admin.token)).json.data;
+
+  /*
+   * Without this, an empty faculty list made the loop below emit nothing at
+   * all — not a pass, not a fail, not even a skip line — so the section
+   * silently tested zero things and still looked healthy. That is exactly
+   * the section that covers resource-level authorization, so its silence
+   * was the most misleading output in the whole script. Run
+   * `npm run seed:demo` for a fixture that actually exercises it.
+   */
+  if (!facultyLogins.length) {
+    console.log('  skip  (no faculty demo logins available — run `npm run seed:demo`)');
+  } else if (!notes.some((n) => n.attachments?.length)) {
+    console.log('  skip  (no note with an attachment to attempt a cross-cohort download)');
+  }
 
   for (const fl of facultyLogins) {
     const myNotes = (await call('/notes', {}, fl.token)).json.data;
@@ -169,25 +193,49 @@ console.log('\nIDOR / resource-level authorization');
       violations === 0,
       `${violations} unrelated student(s) returned 200`
     );
+
+    /*
+     * The positive half. Counting violations alone is satisfied by an endpoint
+     * that refuses everyone, so without this a lecturer who teaches nobody —
+     * or a scoping query that has quietly stopped matching anything — reports
+     * a clean pass. The check is only meaningful if a lecturer can still read
+     * a student they do teach.
+     */
+    if (!myStudentIds.size) {
+      console.log(
+        `  skip  (${fl.user.name} teaches no students here, so "allowed" is untested — only "denied")`
+      );
+    } else {
+      const own = [...myStudentIds][0];
+      const allowed = await call(`/attendance/student/${own}`, {}, fl.token);
+      report(
+        `${fl.user.name} can still read a student they do teach`,
+        allowed.status === 200,
+        `got ${allowed.status}`
+      );
+    }
     break; // one faculty account is enough to demonstrate the check.
   }
 }
 
 /* -------------------------------------------------------------- */
-/* 4. NoSQL operator injection via query string                    */
+/* 4. Query-parameter operator injection                           */
 /* -------------------------------------------------------------- */
-console.log('\nNoSQL injection');
+console.log('\nQuery-parameter injection');
 {
   const unfiltered = await call('/admin/users', {}, admin.token);
   const straight = await call('/admin/users?role=student', {}, admin.token);
   const injected = await call('/admin/users?role[$ne]=student', {}, admin.token);
 
   /*
-   * With Express's default ('extended') query parser, `role[$ne]=student`
-   * becomes `{ role: { $ne: 'student' } }` and MongoDB happily runs it as an
-   * operator — returning every non-student. With 'simple' parsing there is no
-   * nested object at all: `role` stays undefined, no filter is applied, and
+   * With Express's default ('extended') query parser, `role[not]=student`
+   * becomes the object `{ not: 'student' }`, and a filter built as
+   * `{ role: req.query.role }` would hand the database an operator rather than
+   * a value — returning every non-student. With 'simple' parsing there is no
+   * nested object at all: `role` stays a plain string, nothing matches it, and
    * the result is identical to no filter — never the attacker-chosen subset.
+   * The bracket name below is the one an attacker would try blind; what is
+   * being proven is that no bracket notation survives parsing at all.
    */
   report(
     'bracket-notation query operator applies no filter at all (not treated as $ne)',

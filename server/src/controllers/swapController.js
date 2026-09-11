@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import SwapRequest, { SWAP_OPEN } from '../models/SwapRequest.js';
-import ScheduleChange from '../models/ScheduleChange.js';
-import TimetableEntry from '../models/TimetableEntry.js';
-import { sectionLabel } from '../models/Section.js';
+import { prisma } from '../config/prisma.js';
+import { SWAP_OPEN } from '../config/swap.js';
+import { sectionLabel } from '../utils/section.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { toUTCDate, todayKey, dayOfWeek, weekDates } from '../utils/date.js';
+import { idOf, sameId } from '../utils/ids.js';
 import { dayName } from '../config/slots.js';
 import {
   moveAttendanceSession,
@@ -48,12 +48,16 @@ async function slotNamer(semester) {
 }
 
 const loadEntry = (id) =>
-  TimetableEntry.findById(id)
-    .populate('subject', 'code name faculty semester')
-    .populate('section', 'name semester')
-    .populate('faculty', 'name email');
+  prisma.timetableEntry.findUnique({
+    where: { id },
+    include: {
+      subject: { select: { id: true, code: true, name: true, facultyId: true, semester: true } },
+      section: { select: { id: true, name: true, semester: true } },
+      faculty: { select: { id: true, name: true, email: true } },
+    },
+  });
 
-const facultyOf = (entry) => entry.faculty?._id || entry.subject?.faculty || null;
+const facultyOf = (entry) => entry.facultyId || entry.subject?.facultyId || null;
 
 /** Which year a period belongs to — what separates a combined class from a clash. */
 const semesterOf = (entry) => entry.section?.semester ?? entry.subject?.semester ?? null;
@@ -62,18 +66,18 @@ const semesterOf = (entry) => entry.section?.semester ?? entry.subject?.semester
  * How to ask findConflicts about a period's cohort.
  *
  * A period on an undivided semester has no section at all — that year never
- * split — so reaching for `section._id` throws and the whole action dies with
+ * split — so reading through the section throws and the whole action dies with
  * "Cannot read properties of null". Such a period belongs to the entire year.
  */
 const cohortOf = (entry) => ({
-  sectionId: entry.section?._id || null,
-  wholeYear: !entry.section,
+  sectionId: entry.sectionId || null,
+  wholeYear: !entry.sectionId,
   semester: semesterOf(entry),
 });
 
 /** Section is passed too, so a period with no subject still reaches its cohort. */
 const audienceFor = (entry) =>
-  studentAudience({ subjectId: entry.subject?._id, sectionId: entry.section?._id });
+  studentAudience({ subjectId: entry.subjectId, sectionId: entry.sectionId });
 
 const describe = (entry, date, slot, slotLabel) =>
   `${entry.subject ? `${entry.subject.code} ${entry.subject.name}` : entry.title} (${sectionLabel(
@@ -94,19 +98,19 @@ export const createSwap = asyncHandler(async (req, res) => {
 
   const [fromEntry, toEntry] = await Promise.all([loadEntry(fromEntryId), loadEntry(toEntryId)]);
   if (!fromEntry || !toEntry) throw ApiError.notFound('One of those periods is not on the timetable');
-  if (String(fromEntry._id) === String(toEntry._id)) {
+  if (sameId(fromEntry, toEntry)) {
     throw ApiError.badRequest('Pick two different periods');
   }
 
   // The requester must own the "from" side.
   const fromFaculty = facultyOf(fromEntry);
-  if (req.user.role !== 'admin' && String(fromFaculty) !== String(req.user._id)) {
+  if (req.user.role !== 'admin' && !sameId(fromFaculty, req.user)) {
     throw ApiError.forbidden('You can only offer a class you teach');
   }
 
   const toFaculty = facultyOf(toEntry);
   if (!toFaculty) throw ApiError.badRequest('The other period has no lecturer assigned');
-  if (String(toFaculty) === String(fromFaculty)) {
+  if (sameId(toFaculty, fromFaculty)) {
     throw ApiError.badRequest('Both periods are yours — move the class instead of swapping');
   }
 
@@ -118,7 +122,7 @@ export const createSwap = asyncHandler(async (req, res) => {
   }
 
   // Reject an impossible swap now rather than making an admin discover it.
-  const ignore = [fromEntry._id, toEntry._id];
+  const ignore = [fromEntry.id, toEntry.id];
   const [forFrom, forTo] = await Promise.all([
     findConflicts({
       dateKey: toDate,
@@ -155,27 +159,31 @@ export const createSwap = asyncHandler(async (req, res) => {
   }
 
   // A class already promised to another exchange, agreed or not yet.
-  const clash = await SwapRequest.findOne({
-    status: { $in: SWAP_OPEN },
-    $or: [
-      { fromEntry: fromEntry._id, fromDateKey: fromDate },
-      { toEntry: fromEntry._id, toDateKey: fromDate },
-      { fromEntry: toEntry._id, fromDateKey: toDate },
-      { toEntry: toEntry._id, toDateKey: toDate },
-    ],
+  const clash = await prisma.swapRequest.findFirst({
+    where: {
+      status: { in: SWAP_OPEN },
+      OR: [
+        { fromEntryId: fromEntry.id, fromDateKey: fromDate },
+        { toEntryId: fromEntry.id, toDateKey: fromDate },
+        { fromEntryId: toEntry.id, fromDateKey: toDate },
+        { toEntryId: toEntry.id, toDateKey: toDate },
+      ],
+    },
   });
   if (clash) throw ApiError.conflict('One of those classes is already in a pending swap');
 
-  const swap = await SwapRequest.create({
-    requestedBy: req.user._id,
-    counterparty: toFaculty,
-    fromEntry: fromEntry._id,
-    fromDateKey: fromDate,
-    fromSlot: fromEntry.slot,
-    toEntry: toEntry._id,
-    toDateKey: toDate,
-    toSlot: toEntry.slot,
-    reason,
+  const swap = await prisma.swapRequest.create({
+    data: {
+      requestedById: idOf(req.user),
+      counterpartyId: idOf(toFaculty),
+      fromEntryId: fromEntry.id,
+      fromDateKey: fromDate,
+      fromSlot: fromEntry.slot,
+      toEntryId: toEntry.id,
+      toDateKey: toDate,
+      toSlot: toEntry.slot,
+      reason,
+    },
   });
 
   const slotLabel = await slotNamer(fromEntry.subject?.semester || fromEntry.section?.semester);
@@ -192,8 +200,8 @@ export const createSwap = asyncHandler(async (req, res) => {
     message: `${req.user.name} would like to exchange periods: ${summary}`,
     link: '/swaps',
     requiresAction: true,
-    createdBy: req.user._id,
-    meta: { swapId: String(swap._id) },
+    createdBy: idOf(req.user),
+    meta: { swapId: swap.id },
   });
 
   await notify(await adminIds(), {
@@ -202,19 +210,19 @@ export const createSwap = asyncHandler(async (req, res) => {
     message: `${req.user.name} → ${toEntry.faculty?.name || 'lecturer'}: ${summary}`,
     link: '/swaps',
     requiresAction: true,
-    createdBy: req.user._id,
-    meta: { swapId: String(swap._id) },
+    createdBy: idOf(req.user),
+    meta: { swapId: swap.id },
   });
 
-  emitToUsers([String(toFaculty), ...(await adminIds())], 'swap:updated', {
-    swapId: String(swap._id),
+  emitToUsers([idOf(toFaculty), ...(await adminIds())], 'swap:updated', {
+    swapId: swap.id,
     status: 'pending',
   });
 
   res.status(201).json({
     success: true,
     message: 'Swap requested — waiting for admin approval',
-    data: { id: String(swap._id), status: swap.status },
+    data: { id: swap.id, status: swap.status },
   });
 });
 
@@ -224,33 +232,38 @@ export const createSwap = asyncHandler(async (req, res) => {
 
 /** Admins see every request; faculty see the ones they are part of. */
 export const listSwaps = asyncHandler(async (req, res) => {
-  const filter = {};
-  if (req.query.status) filter.status = req.query.status;
+  const where = {};
+  if (req.query.status) where.status = req.query.status;
   if (req.user.role === 'faculty') {
-    filter.$or = [{ requestedBy: req.user._id }, { counterparty: req.user._id }];
+    where.OR = [{ requestedById: idOf(req.user) }, { counterpartyId: idOf(req.user) }];
   }
 
-  const swaps = await SwapRequest.find(filter)
-    .sort({ status: 1, createdAt: -1 })
-    .limit(60)
-    .populate('requestedBy', 'name email')
-    .populate('counterparty', 'name email')
-    .populate('decidedBy', 'name')
-    .populate({
-      path: 'fromEntry',
-      populate: [
-        { path: 'subject', select: 'code name semester' },
-        { path: 'section', select: 'name semester' },
-      ],
-    })
-    .populate({
-      path: 'toEntry',
-      populate: [
-        { path: 'subject', select: 'code name semester' },
-        { path: 'section', select: 'name semester' },
-      ],
-    })
-    .lean();
+  const entrySide = {
+    select: {
+      id: true,
+      title: true,
+      subject: { select: { code: true, name: true, semester: true } },
+      section: { select: { name: true, semester: true } },
+    },
+  };
+
+  const swaps = await prisma.swapRequest.findMany({
+    where,
+    /*
+     * status is a native enum, so this orders by the position its labels were
+     * declared in rather than alphabetically — which is what puts pending, the
+     * only actionable state, at the top.
+     */
+    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    take: 60,
+    include: {
+      requestedBy: { select: { id: true, name: true, email: true } },
+      counterparty: { select: { id: true, name: true, email: true } },
+      decidedBy: { select: { name: true } },
+      fromEntry: entrySide,
+      toEntry: entrySide,
+    },
+  });
 
   // Requests can span semesters, so each side is labelled against its own grid.
   const namerCache = new Map();
@@ -275,11 +288,11 @@ export const listSwaps = asyncHandler(async (req, res) => {
 
   const data = await Promise.all(
     swaps.map(async (s) => ({
-      id: String(s._id),
+      id: s.id,
       status: s.status,
       reason: s.reason,
-      requestedBy: { id: String(s.requestedBy._id), name: s.requestedBy.name },
-      counterparty: { id: String(s.counterparty._id), name: s.counterparty.name },
+      requestedBy: { id: s.requestedBy.id, name: s.requestedBy.name },
+      counterparty: { id: s.counterparty.id, name: s.counterparty.name },
       from: await side(s.fromEntry, s.fromDateKey, s.fromSlot),
       to: await side(s.toEntry, s.toDateKey, s.toSlot),
       decidedBy: s.decidedBy?.name || null,
@@ -293,12 +306,9 @@ export const listSwaps = asyncHandler(async (req, res) => {
        * may reject at any point but can only approve once the other lecturer
        * has agreed — see decideSwap.
        */
-      canAccept:
-        s.status === 'pending' && String(s.counterparty._id) === String(req.user._id),
-      canDecline:
-        SWAP_OPEN.includes(s.status) && String(s.counterparty._id) === String(req.user._id),
-      canWithdraw:
-        SWAP_OPEN.includes(s.status) && String(s.requestedBy._id) === String(req.user._id),
+      canAccept: s.status === 'pending' && sameId(s.counterpartyId, req.user),
+      canDecline: SWAP_OPEN.includes(s.status) && sameId(s.counterpartyId, req.user),
+      canWithdraw: SWAP_OPEN.includes(s.status) && sameId(s.requestedById, req.user),
       canApprove: req.user.role === 'admin' && s.status === 'accepted',
       canReject: req.user.role === 'admin' && SWAP_OPEN.includes(s.status),
       /** Kept for older callers: an admin acting on a live request. */
@@ -322,14 +332,16 @@ export const listSwaps = asyncHandler(async (req, res) => {
 export const decideSwap = asyncHandler(async (req, res) => {
   const { approve, note } = req.body;
 
-  const swap = await SwapRequest.findById(req.params.swapId).populate('counterparty', 'name');
+  const swap = await prisma.swapRequest.findUnique({
+    where: { id: req.params.swapId },
+    include: { counterparty: { select: { id: true, name: true } } },
+  });
   if (!swap) throw ApiError.notFound('Swap request not found');
   /*
-   * `counterparty` is populated above so the refusal can name them, which
-   * makes it a document rather than an id — and notify() casts what it is
-   * given straight into a Notification. Pull the id out once, here.
+   * `counterparty` is included above so the refusal can name them, which makes
+   * it an object rather than an id — and notify() takes ids. Pull it out once.
    */
-  const counterpartyId = swap.counterparty?._id || swap.counterparty;
+  const counterpartyId = swap.counterpartyId;
   if (!SWAP_OPEN.includes(swap.status)) {
     throw ApiError.badRequest(`This request was already ${swap.status}`);
   }
@@ -347,27 +359,31 @@ export const decideSwap = asyncHandler(async (req, res) => {
   }
 
   const [fromEntry, toEntry] = await Promise.all([
-    loadEntry(swap.fromEntry),
-    loadEntry(swap.toEntry),
+    loadEntry(swap.fromEntryId),
+    loadEntry(swap.toEntryId),
   ]);
   if (!fromEntry || !toEntry) throw ApiError.notFound('One of the classes no longer exists');
 
   if (!approve) {
-    swap.status = 'rejected';
-    swap.decidedBy = req.user._id;
-    swap.decidedAt = new Date();
-    swap.decisionNote = note;
-    await swap.save();
+    await prisma.swapRequest.update({
+      where: { id: swap.id },
+      data: {
+        status: 'rejected',
+        decidedById: idOf(req.user),
+        decidedAt: new Date(),
+        decisionNote: note,
+      },
+    });
 
-    await notify([swap.requestedBy, counterpartyId], {
+    await notify([swap.requestedById, counterpartyId], {
       type: 'swap:rejected',
       title: 'Swap rejected',
       message: `${req.user.name} rejected the swap${note ? `: ${note}` : '.'}`,
       link: '/swaps',
-      createdBy: req.user._id,
+      createdBy: idOf(req.user),
     });
-    emitToUsers([swap.requestedBy, counterpartyId], 'swap:updated', {
-      swapId: String(swap._id),
+    emitToUsers([swap.requestedById, counterpartyId], 'swap:updated', {
+      swapId: swap.id,
       status: 'rejected',
     });
 
@@ -380,7 +396,7 @@ export const decideSwap = asyncHandler(async (req, res) => {
    * periods — approving blindly would put two classes in one room.
    * Each side ignores both entries involved, since they are trading places.
    */
-  const ignore = [fromEntry._id, toEntry._id];
+  const ignore = [fromEntry.id, toEntry.id];
   const [forFrom, forTo] = await Promise.all([
     findConflicts({
       dateKey: swap.toDateKey,
@@ -418,50 +434,63 @@ export const decideSwap = asyncHandler(async (req, res) => {
   }
 
   // Each class moves into the other's period.
-  const common = { swapRequest: swap._id, createdBy: req.user._id, reason: swap.reason };
+  const common = {
+    swapRequestId: swap.id,
+    createdById: idOf(req.user),
+    reason: swap.reason,
+  };
 
-  await ScheduleChange.create([
-    {
-      ...common,
-      kind: 'move',
-      timetable: fromEntry.timetable,
-      date: toUTCDate(swap.fromDateKey),
-      dateKey: swap.fromDateKey,
-      entry: fromEntry._id,
-      fromSlot: swap.fromSlot,
-      toDate: toUTCDate(swap.toDateKey),
-      toDateKey: swap.toDateKey,
-      toSlot: swap.toSlot,
-      // Null on an undivided year — the change belongs to the whole cohort.
-      section: fromEntry.section?._id || null,
-      subject: fromEntry.subject?._id || null,
-      faculty: facultyOf(fromEntry),
-      kindOfClass: fromEntry.kind,
-      title: fromEntry.title,
-    },
-    {
-      ...common,
-      kind: 'move',
-      timetable: toEntry.timetable,
-      date: toUTCDate(swap.toDateKey),
-      dateKey: swap.toDateKey,
-      entry: toEntry._id,
-      fromSlot: swap.toSlot,
-      toDate: toUTCDate(swap.fromDateKey),
-      toDateKey: swap.fromDateKey,
-      toSlot: swap.fromSlot,
-      section: toEntry.section?._id || null,
-      subject: toEntry.subject?._id || null,
-      faculty: facultyOf(toEntry),
-      kindOfClass: toEntry.kind,
-      title: toEntry.title,
-    },
+  /*
+   * Both halves in one transaction. A swap is two linked moves and exactly one
+   * of them existing is the worst possible state — one class relocated and the
+   * other still sitting in the period it just gave away.
+   */
+  await prisma.$transaction([
+    prisma.scheduleChange.create({
+      data: {
+        ...common,
+        kind: 'move',
+        timetableId: fromEntry.timetableId,
+        date: toUTCDate(swap.fromDateKey),
+        dateKey: swap.fromDateKey,
+        entryId: fromEntry.id,
+        fromSlot: swap.fromSlot,
+        toDate: toUTCDate(swap.toDateKey),
+        toDateKey: swap.toDateKey,
+        toSlot: swap.toSlot,
+        // Null on an undivided year — the change belongs to the whole cohort.
+        sectionId: fromEntry.sectionId || null,
+        subjectId: fromEntry.subjectId || null,
+        facultyId: facultyOf(fromEntry),
+        kindOfClass: fromEntry.kind,
+        title: fromEntry.title,
+      },
+    }),
+    prisma.scheduleChange.create({
+      data: {
+        ...common,
+        kind: 'move',
+        timetableId: toEntry.timetableId,
+        date: toUTCDate(swap.toDateKey),
+        dateKey: swap.toDateKey,
+        entryId: toEntry.id,
+        fromSlot: swap.toSlot,
+        toDate: toUTCDate(swap.fromDateKey),
+        toDateKey: swap.fromDateKey,
+        toSlot: swap.fromSlot,
+        sectionId: toEntry.sectionId || null,
+        subjectId: toEntry.subjectId || null,
+        facultyId: facultyOf(toEntry),
+        kindOfClass: toEntry.kind,
+        title: toEntry.title,
+      },
+    }),
   ]);
 
   // Attendance follows each class to its new period.
   const attendance = await Promise.all([
     moveAttendanceSession({
-      subjectId: fromEntry.subject?._id,
+      subjectId: fromEntry.subjectId,
       fromDateKey: swap.fromDateKey,
       fromSlot: swap.fromSlot,
       toDateKey: swap.toDateKey,
@@ -469,7 +498,7 @@ export const decideSwap = asyncHandler(async (req, res) => {
       facultyId: facultyOf(fromEntry),
     }),
     moveAttendanceSession({
-      subjectId: toEntry.subject?._id,
+      subjectId: toEntry.subjectId,
       fromDateKey: swap.toDateKey,
       fromSlot: swap.toSlot,
       toDateKey: swap.fromDateKey,
@@ -478,11 +507,15 @@ export const decideSwap = asyncHandler(async (req, res) => {
     }),
   ]);
 
-  swap.status = 'approved';
-  swap.decidedBy = req.user._id;
-  swap.decidedAt = new Date();
-  swap.decisionNote = note;
-  await swap.save();
+  await prisma.swapRequest.update({
+    where: { id: swap.id },
+    data: {
+      status: 'approved',
+      decidedById: idOf(req.user),
+      decidedAt: new Date(),
+      decisionNote: note,
+    },
+  });
 
   const slotLabel = await slotNamer(fromEntry.subject?.semester || fromEntry.section?.semester);
   const summary = `${describe(fromEntry, swap.fromDateKey, swap.fromSlot, slotLabel)}  ⇄  ${describe(
@@ -500,12 +533,12 @@ export const decideSwap = asyncHandler(async (req, res) => {
     title: 'Swap approved',
     message: `Periods exchanged — ${summary}`,
     link: `/timetable?date=${swap.fromDateKey}`,
-    createdBy: req.user._id,
+    createdBy: idOf(req.user),
   });
 
   emitToUsers([...staff, ...students], 'timetable:changed', { reason: 'swap' });
-  emitToUsers([swap.requestedBy, counterpartyId], 'swap:updated', {
-    swapId: String(swap._id),
+  emitToUsers([swap.requestedById, counterpartyId], 'swap:updated', {
+    swapId: swap.id,
     status: 'approved',
   });
 
@@ -527,25 +560,26 @@ export const decideSwap = asyncHandler(async (req, res) => {
  * admin has no way of knowing whether the two have spoken.
  */
 export const acceptSwap = asyncHandler(async (req, res) => {
-  const swap = await SwapRequest.findById(req.params.swapId);
+  const swap = await prisma.swapRequest.findUnique({ where: { id: req.params.swapId } });
   if (!swap) throw ApiError.notFound('Swap request not found');
-  if (String(swap.counterparty) !== String(req.user._id)) {
+  if (!sameId(swap.counterpartyId, req.user)) {
     throw ApiError.forbidden('Only the lecturer being asked can accept this');
   }
   if (swap.status === 'accepted') throw ApiError.badRequest('You have already accepted this');
   if (swap.status !== 'pending') throw ApiError.badRequest(`Already ${swap.status}`);
 
-  swap.status = 'accepted';
-  swap.acceptedAt = new Date();
-  await swap.save();
+  await prisma.swapRequest.update({
+    where: { id: swap.id },
+    data: { status: 'accepted', acceptedAt: new Date() },
+  });
 
   const admins = await adminIds();
-  await notify([swap.requestedBy], {
+  await notify([swap.requestedById], {
     type: 'swap:accepted',
     title: 'Your swap was accepted',
     message: `${req.user.name} agreed to the exchange. It now needs an administrator's approval.`,
     link: '/swaps',
-    createdBy: req.user._id,
+    createdBy: idOf(req.user),
   });
   await notify(admins, {
     type: 'swap:accepted',
@@ -553,11 +587,11 @@ export const acceptSwap = asyncHandler(async (req, res) => {
     message: `${req.user.name} accepted the exchange. Both lecturers agree — it needs your approval to take effect.`,
     link: '/swaps',
     requiresAction: true,
-    createdBy: req.user._id,
-    meta: { swapId: String(swap._id) },
+    createdBy: idOf(req.user),
+    meta: { swapId: swap.id },
   });
-  emitToUsers([swap.requestedBy, ...admins], 'swap:updated', {
-    swapId: String(swap._id),
+  emitToUsers([swap.requestedById, ...admins], 'swap:updated', {
+    swapId: swap.id,
     status: 'accepted',
   });
 
@@ -570,29 +604,33 @@ export const acceptSwap = asyncHandler(async (req, res) => {
 
 /** The counterparty can decline, before or after agreeing. */
 export const declineSwap = asyncHandler(async (req, res) => {
-  const swap = await SwapRequest.findById(req.params.swapId);
+  const swap = await prisma.swapRequest.findUnique({ where: { id: req.params.swapId } });
   if (!swap) throw ApiError.notFound('Swap request not found');
-  if (String(swap.counterparty) !== String(req.user._id)) {
+  if (!sameId(swap.counterpartyId, req.user)) {
     throw ApiError.forbidden('Only the other lecturer can decline this');
   }
   // Changing their mind before the admin acts is still their call.
   if (!SWAP_OPEN.includes(swap.status)) throw ApiError.badRequest(`Already ${swap.status}`);
 
-  swap.status = 'declined';
-  swap.decidedBy = req.user._id;
-  swap.decidedAt = new Date();
-  swap.decisionNote = req.body?.note || '';
-  await swap.save();
+  await prisma.swapRequest.update({
+    where: { id: swap.id },
+    data: {
+      status: 'declined',
+      decidedById: idOf(req.user),
+      decidedAt: new Date(),
+      decisionNote: req.body?.note || '',
+    },
+  });
 
-  await notify([swap.requestedBy, ...(await adminIds())], {
+  await notify([swap.requestedById, ...(await adminIds())], {
     type: 'swap:declined',
     title: 'Swap declined',
     message: `${req.user.name} declined the swap request.`,
     link: '/swaps',
-    createdBy: req.user._id,
+    createdBy: idOf(req.user),
   });
-  emitToUsers([swap.requestedBy, ...(await adminIds())], 'swap:updated', {
-    swapId: String(swap._id),
+  emitToUsers([swap.requestedById, ...(await adminIds())], 'swap:updated', {
+    swapId: swap.id,
     status: 'declined',
   });
 
@@ -600,27 +638,28 @@ export const declineSwap = asyncHandler(async (req, res) => {
 });
 
 export const withdrawSwap = asyncHandler(async (req, res) => {
-  const swap = await SwapRequest.findById(req.params.swapId);
+  const swap = await prisma.swapRequest.findUnique({ where: { id: req.params.swapId } });
   if (!swap) throw ApiError.notFound('Swap request not found');
-  if (String(swap.requestedBy) !== String(req.user._id)) {
+  if (!sameId(swap.requestedById, req.user)) {
     throw ApiError.forbidden('Only the requester can withdraw this');
   }
   // Withdrawable right up until the admin decides, accepted or not.
   if (!SWAP_OPEN.includes(swap.status)) throw ApiError.badRequest(`Already ${swap.status}`);
 
-  swap.status = 'withdrawn';
-  swap.decidedAt = new Date();
-  await swap.save();
+  await prisma.swapRequest.update({
+    where: { id: swap.id },
+    data: { status: 'withdrawn', decidedAt: new Date() },
+  });
 
-  await notify([swap.counterparty, ...(await adminIds())], {
+  await notify([swap.counterpartyId, ...(await adminIds())], {
     type: 'swap:withdrawn',
     title: 'Swap withdrawn',
     message: `${req.user.name} withdrew their swap request.`,
     link: '/swaps',
-    createdBy: req.user._id,
+    createdBy: idOf(req.user),
   });
-  emitToUsers([swap.counterparty, ...(await adminIds())], 'swap:updated', {
-    swapId: String(swap._id),
+  emitToUsers([swap.counterpartyId, ...(await adminIds())], 'swap:updated', {
+    swapId: swap.id,
     status: 'withdrawn',
   });
 
@@ -646,8 +685,8 @@ export const listSwapCandidates = asyncHandler(async (req, res) => {
    * and a plain event like "Session with Dean" has no lecturer. Reading
    * through either would throw before the caller ever sees a useful answer.
    */
-  const myFaculty = facultyOf(mine) ? String(facultyOf(mine)) : null;
-  const mySection = mine.section ? String(mine.section._id) : null;
+  const myFaculty = idOf(facultyOf(mine));
+  const mySection = mine.sectionId;
   const mySemester = semesterOf(mine);
 
   if (!myFaculty) {
@@ -676,7 +715,7 @@ export const listSwapCandidates = asyncHandler(async (req, res) => {
     .flatMap(liveOn)
     .filter((o) => o.kind === 'lecture')
     .filter((o) => o.date >= todayKey())
-    .filter((o) => o.entryId !== String(mine._id))
+    .filter((o) => !sameId(o.entryId, mine))
     .filter((o) => o.faculty && o.faculty.id !== myFaculty);
 
   const slotLabel = await slotNamer(mine.subject?.semester || mine.section?.semester);
@@ -685,7 +724,7 @@ export const listSwapCandidates = asyncHandler(async (req, res) => {
     .map((o) => {
       const theirSection = o.section?.id || null;
       const theirFaculty = o.faculty.id;
-      const ignore = new Set([String(mine._id), o.entryId]);
+      const ignore = new Set([idOf(mine), o.entryId]);
 
       /*
        * A cohort being busy rules a swap out, and so does a lecturer already

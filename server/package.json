@@ -5,15 +5,24 @@
   "type": "module",
   "description": "Sitare University ERP - API server (Attendance Module)",
   "main": "src/server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "build": "prisma generate && prisma migrate deploy",
     "seed": "node src/seed/seed.js",
+    "seed:demo": "node src/seed/fixture.js",
     "security-check": "node security-check.mjs",
     "google-auth-check": "node google-auth-check.mjs",
+    "guard:ids": "node guard-ids.mjs",
+    "api-snapshot": "node api-snapshot.mjs",
     "create-admin": "node create-admin.mjs"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "prisma": "^6.19.3",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -22,11 +31,13 @@
     "google-auth-library": "^11.0.2",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.5",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "pdfjs-dist": "^6.2.108",
     "socket.io": "^4.8.1",
     "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
   }
 }

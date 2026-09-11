@@ -1,13 +1,19 @@
 import http from 'http';
 import app from './app.js';
 import { env } from './config/env.js';
-import { connectDB } from './config/db.js';
+import { prisma } from './config/prisma.js';
 import { initSocket } from './sockets/index.js';
 
 const server = http.createServer(app);
 
 async function start() {
-  await connectDB();
+  /*
+   * Connected here rather than left to connect lazily, so a wrong DATABASE_URL
+   * fails at boot with one clear message instead of on whichever request
+   * happens to touch the database first.
+   */
+  await prisma.$connect();
+  console.log('[db] PostgreSQL connected');
   initSocket(server);
 
   server.listen(env.port, '0.0.0.0', () => {

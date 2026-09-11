@@ -3,6 +3,7 @@ import { protect, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { uploadPdfOrCsv } from '../middleware/upload.js';
 import { auditLog } from '../utils/audit.js';
+import { idOf } from '../utils/ids.js';
 import { listLeaveDocuments } from '../controllers/leaveController.js';
 import {
   getOverview,
@@ -43,7 +44,7 @@ router.use(protect, authorize('admin'));
  */
 router.use((req, _res, next) => {
   if (req.method !== 'GET') {
-    auditLog('admin_action', { userId: String(req.user._id), method: req.method, path: req.path });
+    auditLog('admin_action', { userId: idOf(req.user), method: req.method, path: req.path });
   }
   next();
 });

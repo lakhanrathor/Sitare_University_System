@@ -17,32 +17,30 @@ academics), Notes (course material sharing), Exam schedules, and Leave applicati
 | Layer | Technology |
 | --- | --- |
 | Frontend | React 18 + Vite 6 + Tailwind CSS 4, React Router, `socket.io-client` |
-| Backend | Node.js (ESM) + Express 4 + Mongoose 8 (MongoDB) |
+| Backend | Node.js (ESM) + Express 4 + Prisma 6 (PostgreSQL 15+) |
 | Realtime | Socket.io, JWT-authenticated on both REST and the socket handshake |
 | Auth | JWT (`jsonwebtoken`) + bcrypt password hashing, plus optional Google sign-in (`google-auth-library` server-side, `@react-oauth/google` client-side) — both issue the same JWT |
 | Validation | Zod schemas on every request body |
-| File uploads | `multer` (memory) → GridFS via `services/fileStore.js`; PDFs parsed with `pdfjs-dist` |
-| Security middleware | `helmet`, `cors` pinned to the client origin, `express-rate-limit` on both login routes, `'simple'` query parsing (blocks NoSQL operator injection via `?field[$ne]=x`) |
+| File uploads | `multer` (memory) → a `files` table via `services/fileStore.js`; PDFs parsed with `pdfjs-dist` |
+| Security middleware | `helmet`, `cors` pinned to the client origin, `express-rate-limit` on both login routes, `'simple'` query parsing (blocks operator-injection attempts via `?field[$ne]=x`) |
 
 ## Repository layout
 
 ```
 server/src
-├── config/        env.js (required env vars) · slots.js (default period grid, seed-time only)
-├── models/        User · Section · Subject · Enrollment
-│                  ClassSession · Attendance · AttendanceDelegation
-│                  Timetable · TimetableEntry · ScheduleChange · SwapRequest
-│                  Note · ExamSchedule · LeaveDocument · Notification
+├── config/        env.js (required env vars) · prisma.js (the one client)
+│                  slots.js (default period grid + entry kinds) · attendance.js · exams.js · swap.js
+├── prisma/        schema.prisma (one level up, beside src) + migrations/
 ├── services/      attendanceService.js  <- the attendance % rule lives here, nowhere else
 │                  timetableService.js   <- resolves the grid + keeps attendance in step
 │                  pdfParser.js          <- turns a timetable/roster PDF into structured rows
-│                  notificationService.js · fileStore.js (GridFS) · purgeService.js
+│                  notificationService.js · fileStore.js (bytea) · purgeService.js
 ├── controllers/   auth · subject · attendance · timetable · schedule · swap
 │                  admin · note · exam · leave · notification
-├── middleware/     auth (JWT + role guard) · validate (zod) · error (maps Mongoose/Zod errors) · upload (multer)
+├── middleware/     auth (JWT + role guard) · validate (zod) · error (maps Prisma/Zod errors) · upload (multer)
 ├── utils/          audit.js (security/audit log lines) · ApiError · asyncHandler · csv · date · pdf
 ├── sockets/        JWT-authenticated Socket.io gateway
-└── seed/           wipes the DB, creates a single admin account — safe to re-run in dev/staging
+└── seed/           seed.js wipes the DB and creates one admin · fixture.js loads the demo dataset
 
 server/  (repo root of the API, one level up from src/)
 ├── security-check.mjs      <- HTTP-level security regression checks against a running server
@@ -64,12 +62,14 @@ client/src
 
 ## Running it locally
 
-Requires Node 18+ and a local MongoDB on `mongodb://127.0.0.1:27017`.
+Requires Node 18+ and PostgreSQL 15 or newer at `DATABASE_URL` (`docker compose up -d db`
+at the repo root starts one).
 
 ```bash
-npm run setup   # installs root + server + client deps
-npm run seed    # resets the DB and creates one admin account — safe to re-run
-npm run dev     # API on :5000 (auto-restarts on save) + web on :5173, together
+npm run setup                          # installs root + server + client deps
+npm --prefix server exec prisma migrate deploy   # create the schema
+npm run seed                           # resets the DB and creates one admin account — safe to re-run
+npm run dev                            # API on :5000 (auto-restarts on save) + web on :5173, together
 ```
 
 Open <http://localhost:5173>. Vite proxies `/api` and `/socket.io` to the API.
@@ -79,7 +79,7 @@ Open <http://localhost:5173>. Vite proxies `/api` and `/socket.io` to the API.
   without `--watch` for a stable session (e.g. a live demo); the client's fetch wrapper also
   retries automatically on that specific failure signature either way.
 - `npm run stop` frees ports 5000/5173 if a previous run didn't shut down cleanly.
-- `npm run seed` (`server/src/seed/seed.js`) wipes every collection and creates exactly one
+- `npm run seed` (`server/src/seed/seed.js`) empties every table and creates exactly one
   account: `admin@sitare.org` / `admin123`. Everything else — sections, faculty, students,
   subjects, the timetable — starts empty on purpose, so the real workflow (log in as admin,
   then build the rest through Admin → People / Academics / Manage Timetable) can be tested
@@ -93,6 +93,40 @@ Open <http://localhost:5173>. Vite proxies `/api` and `/socket.io` to the API.
   configured" message, so password login is unaffected on a checkout with no Google Cloud project.
 - `npm --prefix server run security-check` and `npm --prefix server run google-auth-check` are
   the closest thing this project has to a test suite — see **Security** below.
+- `npm --prefix server run seed:demo` loads a deterministic development fixture
+  (`src/seed/fixture.js`): three faculty with disjoint subjects, a section-less subject, one
+  schedule change of each kind, a stand-in, a student enrolled mid-semester. It exists
+  because the checks above assert nothing against `seed.js`'s single admin account — the
+  RBAC section skips and the IDOR section runs an empty loop. `npm --prefix server run
+  api-snapshot -- --compare` then diffs 52 endpoint responses against a committed baseline,
+  which is the only thing that catches a wrong *number* rather than a wrong status code.
+
+## Why PostgreSQL
+
+The backend ran on MongoDB until it didn't. The data model was relational in everything but
+name — fifteen collections almost entirely defined by their references to each other — and
+Mongo enforced none of it: no foreign keys, no joins, no transactions around multi-step writes.
+Several of the bugs fixed in this project were exactly that class of failure. The move happened
+while every record was still dummy data, which is the cheapest it was ever going to be.
+
+What that buys, concretely:
+
+- `prisma/schema.prisma` is a translation of the old models, not a redesign — same fields, same
+  uniqueness, same nullability
+- `prisma/migrations/*_constraints/migration.sql` is hand-written and must stay that way.
+  `prisma migrate diff` cannot see `NULLS NOT DISTINCT` (which is what still makes two
+  section-less subjects collide on one code), the attachment exclusive-arc CHECK, or the
+  date/dateKey agreement CHECKs, so it neither generates nor removes them
+- the register write, an approved swap, publishing a grid and deleting one are transactions.
+  Each has a half-done state that is worse than not doing it at all
+- `src/utils/ids.js` — `sameId(a, b)` is **never** to be written back as
+  `String(a) === String(b)`. Two absent ids both stringify to `"undefined"` and compare
+  **equal**, and every one of those sites is an authorization check, so the old pattern fails
+  *open*. `npm --prefix server run guard:ids` fails the build if either banned pattern reappears
+- **hyphenated values are text with a CHECK, not native enums.** A PostgreSQL enum label may
+  contain a hyphen but a Prisma identifier may not, so `office-hours` has to be spelled
+  `officeHours` and `@map`'d — and the client then hands JavaScript the *name*, not the value.
+  That silently broke all three office-hours guards once. Do not "tidy" these back into enums
 
 ## Domain rules that must not be broken
 
@@ -163,9 +197,10 @@ TimetableEntry -> timetable × dayOfWeek × slot × section (unique) · subject,
 ScheduleChange -> extra | move | cancel, on a specific date · always carries `timetable`
 SwapRequest    -> two entries + dates · pending|approved|rejected|declined|withdrawn
 
-Note          -> semester, section (nullable), subject, attachments (GridFS), uploadedBy
-ExamSchedule  -> semester, section (nullable), papers[] (dated), attachments (GridFS)
-LeaveDocument -> student, sentAt, regarding, attachments (GridFS) · source student|upload|email
+Note          -> semester, section (nullable), subject, attachments, uploadedBy
+ExamSchedule  -> semester, section (nullable), papers[] (dated), attachments
+LeaveDocument -> student, sentAt, regarding, attachments · source student|upload|email
+Attachment    -> exactly one of note | exam | leave (CHECK) · File holds the bytes
 Notification  -> per recipient, pushed over the socket and persisted
 ```
 
@@ -215,8 +250,8 @@ All routes except `/api/auth/login` and `/api/auth/google` require `Authorizatio
   looser bound, since there is no password to guess against it, only verification cost to cap.
   Plus `helmet`; CORS pinned to `CLIENT_ORIGIN`
 - Express's query parser is set to `'simple'` ([app.js](server/src/app.js)) so `?field[$ne]=x`
-  cannot be parsed into a Mongo operator — the query-string equivalent of the NoSQL-injection
-  protection Zod already gives request bodies
+  cannot be parsed into a nested object — kept because it costs nothing and closes the
+  query-string equivalent of the injection protection Zod already gives request bodies
 - All request bodies validated with Zod; future-dated attendance rejected
 - Unexpected (non-`ApiError`) exceptions never reach the client with their original message in
   production — [error.js](server/src/middleware/error.js) swaps in a generic one and logs the

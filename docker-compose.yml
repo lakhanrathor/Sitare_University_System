@@ -1,0 +1,38 @@
+# Local PostgreSQL for development.
+#
+# Pinned to 17 rather than left floating: the schema relies on
+# UNIQUE NULLS NOT DISTINCT for `subjects (code, section_id)` and
+# `timetable_entries (timetable_id, day_of_week, slot, section_id)`, which
+# needs PostgreSQL 15 or newer. A machine that silently ran 14 would fail at
+# migration time with an error that reads like a syntax mistake.
+#
+#   docker compose up -d db      start it
+#   docker compose down          stop it, keep the data
+#   docker compose down -v       stop it and delete the data
+#
+# Not required: any PostgreSQL 15+ reachable at DATABASE_URL works, including a
+# native Windows install. Docker only saves having one.
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: sitare-erp-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sitare
+      POSTGRES_PASSWORD: sitare_dev
+      POSTGRES_DB: sitare_erp
+    ports:
+      # 5433 on the host, so a PostgreSQL already installed on this machine
+      # keeps 5432 and the two never fight over the port.
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U sitare -d sitare_erp']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
