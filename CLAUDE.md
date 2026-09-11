@@ -93,6 +93,40 @@ Open <http://localhost:5173>. Vite proxies `/api` and `/socket.io` to the API.
   configured" message, so password login is unaffected on a checkout with no Google Cloud project.
 - `npm --prefix server run security-check` and `npm --prefix server run google-auth-check` are
   the closest thing this project has to a test suite — see **Security** below.
+- `npm --prefix server run seed:demo` loads a deterministic development fixture
+  (`src/seed/fixture.js`): three faculty with disjoint subjects, a section-less subject, one
+  schedule change of each kind, a stand-in, a student enrolled mid-semester. It exists
+  because the checks above assert nothing against `seed.js`'s single admin account — the
+  RBAC section skips and the IDOR section runs an empty loop. `npm --prefix server run
+  api-snapshot -- --compare` then diffs 52 endpoint responses against a committed baseline,
+  which is the only thing that catches a wrong *number* rather than a wrong status code.
+
+## Migrating to PostgreSQL (in progress)
+
+The backend is being moved from MongoDB/Mongoose to PostgreSQL/Prisma. The data model is
+relational in everything but name — fifteen collections almost entirely defined by their
+references to each other — and Mongo enforces none of it: no foreign keys, no joins, no
+transactions around multi-step writes. Several bugs fixed here were exactly that class of
+failure. Nothing is in production and every record is dummy data, so this is the cheapest
+the change will ever be.
+
+**Both databases are live during the migration.** A ported module reads Postgres; an
+un-ported one still reads Mongo. Both fixtures therefore load the same dataset, and
+`seed:demo` / `seed:demo:pg` are checked against each other by row count.
+
+- `prisma/schema.prisma` is a translation of `src/models`, not a redesign — same fields,
+  same uniqueness, same nullability
+- `prisma/migrations/*_constraints/migration.sql` is hand-written and must stay that way:
+  `NULLS NOT DISTINCT` (which is what makes a section-less subject code still collide),
+  the attachment exclusive-arc CHECK, and the date/dateKey agreement CHECKs are all
+  invisible to `prisma migrate diff`
+- `src/utils/ids.js` — `sameId(a, b)` is **never** to be written back as
+  `String(a) === String(b)`. Two absent ids both stringify to `"undefined"` and compare
+  **equal**, and every one of those sites is an authorization check, so the old pattern
+  fails *open*. `npm --prefix server run guard:ids` fails the build if either banned
+  pattern reappears
+- a local database: `docker compose up -d db` at the repo root, or any PostgreSQL 15+ at
+  `DATABASE_URL`. 15+ is not optional — `NULLS NOT DISTINCT` does not exist before it
 
 ## Domain rules that must not be broken
 
