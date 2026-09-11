@@ -8,9 +8,9 @@ export function getPublishedTimetable(semester) {
   const where = { status: 'published' };
   if (semester) where.semester = Number(semester);
   /*
-   * publishedAt is nullable, and Postgres puts nulls first on a descending
-   * sort where Mongo puts them last — which would make a grid that was never
-   * actually published win over one that was. Said explicitly.
+   * publishedAt is nullable and the default for a descending sort would put
+   * those nulls first — making a grid that was never actually published win
+   * over one that was. Said explicitly rather than left to the default.
    */
   return prisma.timetable.findFirst({
     where,

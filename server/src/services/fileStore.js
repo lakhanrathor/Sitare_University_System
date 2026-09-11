@@ -12,10 +12,10 @@ import { idOf, isUuid } from '../utils/ids.js';
  * the scale this runs at — a few hundred leave applications a semester — the
  * simplicity is worth more than object storage would be.
  *
- * This was GridFS and is now a `bytea` column in its own table. The three
- * functions keep their exact contracts, including openFile returning a
- * readable stream, so the nine call sites across notes, exams and leave did
- * not change at all. Streaming is not real here and never was: multer already
+ * The bytes live in a `bytea` column in their own table, away from the
+ * attachment metadata, because a blob beside the metadata would be read into
+ * memory on any listing. openFile returns a readable stream for the benefit of
+ * its callers rather than because anything streams: multer already
  * materialises the whole upload in memory on the way in, under a 15 MB cap.
  */
 
@@ -45,8 +45,8 @@ export async function openFile(fileId) {
   auditLog('file_downloaded', { fileId: id });
 
   return {
-    // The same three fields the GridFS document exposed, so callers setting
-    // Content-Type and Content-Length are untouched.
+    // Shaped for the callers, which set Content-Type and Content-Length
+    // straight from it.
     file: { length: file.size, filename: file.filename, contentType: file.contentType },
     /*
      * Wrapped in an array deliberately. Readable.from() treats a Buffer as an

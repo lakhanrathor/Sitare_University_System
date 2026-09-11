@@ -28,6 +28,16 @@ const BANNED = [
     re: /String\((?:[^()]|\([^()]*\))*\)\s*[!=]==\s*String\(/,
   },
   {
+    /*
+     * `_id` is not a column on anything. A surviving reference is not a style
+     * problem: it reads as undefined, which is silent. Two went unnoticed for
+     * a while — every admin write was audit-logged with userId "undefined",
+     * and a timetable import matched a lecturer by name and assigned nobody.
+     */
+    what: '_id no longer exists — the column is `id`',
+    re: /(?<![A-Za-z0-9_$])_id(?![A-Za-z0-9_$])/,
+  },
+  {
     what: 'String(id) as a lookup key — use idOf(id)',
     /* The closing bracket matters: String(name).toUpperCase() as a key is
        ordinary text handling, not an id, and must not be flagged. */

@@ -9,13 +9,12 @@
 -- ---------------------------------------------------------------------------
 -- 1. Uniqueness that must treat NULL as a value
 --
--- MongoDB indexes a missing/null field as a value, so two documents that both
--- leave `section` null collide. SQL treats every NULL as distinct, so the same
--- index would let them both through — which in this system means two subjects
+-- SQL treats every NULL as distinct, so a plain unique index lets two rows that
+-- both leave `section_id` null through — which in this system means two subjects
 -- with one code, each with its own roster, and a whole-year timetable that can
 -- book the same cohort into one period twice.
 --
--- NULLS NOT DISTINCT restores the MongoDB behaviour. It needs PostgreSQL 15+.
+-- NULLS NOT DISTINCT is what makes those collide. It needs PostgreSQL 15+.
 -- ---------------------------------------------------------------------------
 
 DROP INDEX "subjects_code_section_id_key";
@@ -93,13 +92,12 @@ ALTER TABLE "schedule_changes" ADD CONSTRAINT "schedule_changes_to_date_matches_
   );
 
 -- ---------------------------------------------------------------------------
--- 6. Case, which used to be a Mongoose setter
+-- 6. Case
 --
--- `Subject.code` and `Section.name` were `uppercase: true`, and that setter is
--- load-bearing for uniqueness: without it 'cs101' and 'CS101' are two subjects
--- with separate rosters, and the unique index above cannot see that they are
--- the same course. A Prisma client extension normalises writes; this makes a
--- miss loud instead of silent.
+-- Uppercasing `code` and `name` is load-bearing for uniqueness: without it
+-- 'cs101' and 'CS101' are two subjects with separate rosters, and the unique
+-- index above cannot see that they are the same course. The application
+-- uppercases on write; this makes a miss loud instead of silent.
 -- ---------------------------------------------------------------------------
 
 ALTER TABLE "subjects" ADD CONSTRAINT "subjects_code_is_upper"
@@ -109,12 +107,12 @@ ALTER TABLE "sections" ADD CONSTRAINT "sections_name_is_upper"
   CHECK ("name" = upper("name"));
 
 -- ---------------------------------------------------------------------------
--- 7. Ranges that were enforced only by Mongoose's min/max
+-- 7. Ranges
 --
--- Mongoose checked these on .save() and not on updateMany, so they were never
--- actually guaranteed. Slots and weekdays index into the period grid; a value
--- outside it renders nowhere and is invisible until someone asks why a class
--- vanished.
+-- Slots and weekdays index into the period grid; a value outside it renders
+-- nowhere and is invisible until someone asks why a class vanished. Checked by
+-- the database so a bulk update cannot bypass it the way request validation
+-- can be bypassed.
 -- ---------------------------------------------------------------------------
 
 ALTER TABLE "sections" ADD CONSTRAINT "sections_semester_range"

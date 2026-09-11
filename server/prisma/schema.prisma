@@ -1,9 +1,8 @@
 // Sitare University ERP — relational schema.
 //
-// This is a direct translation of the Mongoose models in src/models, not a
-// redesign: the same fields, the same uniqueness, the same nullability. What
-// changes is that the relationships between them are now declared and enforced
-// instead of merely intended.
+// The whole data model in one file. Relationships between records are declared
+// here and enforced by the database, rather than being a convention the
+// application code has to remember.
 //
 // Three conventions run through the whole file, written down once here rather
 // than repeated on every model:
@@ -41,18 +40,16 @@ datasource db {
 // ---------------------------------------------------------------------------
 // Enums
 //
-// These are enums in Mongoose too, but Mongoose only checks them on .save() —
-// an updateMany writes whatever it is given, so these are the first time the
-// values are actually guaranteed. Only the sets whose labels are already valid
-// identifiers are native enums; the hyphenated ones are text with a CHECK, for
-// the reason recorded on TimetableEntry.kind.
+// Only the sets whose labels are already valid identifiers are native enums.
+// The hyphenated ones are text with a CHECK constraint instead, for the reason
+// recorded on TimetableEntry.kind — which is worth reading before changing any
+// of these.
 // ---------------------------------------------------------------------------
 
 /*
  * Declared alphabetically on purpose. PostgreSQL orders an enum by the
- * position a label was declared in, where Mongo sorted the strings — and
- * `orderBy: { role: 'asc' }` on the People list is the difference between
- * admin/faculty/student and whatever order the type happened to be written in.
+ * position a label was declared in, not by the label itself — so the order
+ * they are written in here *is* the order the People list comes back in.
  */
 enum Role {
   admin
@@ -107,8 +104,8 @@ model User {
   email String @unique
 
   /// Never selected by default — the client is configured with
-  /// omit: { user: { password: true } }, the equivalent of Mongoose's
-  /// `select: false`. Only the two login paths opt back in.
+  /// omit: { user: { password: true } }, so the hash is only ever read by a
+  /// query that asks for it by name. Only the two login paths do.
   password String
 
   role Role @default(student)
@@ -446,11 +443,12 @@ model TimetableEntry {
   /*
    * Text with a CHECK rather than a native enum, and the reason is worth
    * keeping: a SQL enum label may contain a hyphen but a Prisma identifier may
-   * not, so 'office-hours' has to be spelled officeHours and @map'd — and then
-   * the client hands JavaScript the *name*, not the value. Every guard in the
-   * codebase compares against 'office-hours', so all of them silently stopped
-   * matching and attendance could be recorded against an office-hours period.
-   * The value now reads back exactly as it is stored and as the API sends it.
+   * not, so 'office-hours' would have to be spelled officeHours and @map'd —
+   * and the client then hands JavaScript the *name*, not the value. Every guard
+   * in this codebase compares against 'office-hours', so all of them would
+   * silently stop matching and attendance could be recorded against an
+   * office-hours period. As text the value reads back exactly as it is stored
+   * and exactly as the API sends it.
    */
   kind  String @default("lecture")
   title String @default("")

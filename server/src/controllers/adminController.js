@@ -225,10 +225,9 @@ export const listUsers = asyncHandler(async (req, res) => {
     where,
     include: { section: { select: { id: true, name: true } } },
     /*
-     * Mongo sorts nulls first on an ascending sort; Postgres sorts them last.
-     * rollNumber is null for every lecturer, and with a 500-row cap that
-     * decides *which rows come back*, not merely their order — so it is said
-     * explicitly rather than left to the database's default.
+     * rollNumber is null for every lecturer, and the default puts those last.
+     * With a 500-row cap that decides *which rows come back*, not merely their
+     * order — so where the nulls go is stated rather than inherited.
      */
     orderBy: [{ role: 'asc' }, { rollNumber: { sort: 'asc', nulls: 'first' } }, { name: 'asc' }],
     take: 500,
@@ -374,11 +373,9 @@ export const createUser = asyncHandler(async (req, res) => {
       });
       if (subjects.length) {
         /*
-         * skipDuplicates rather than a swallowed error: the unordered
-         * insertMany this replaces relied on Mongo continuing past a duplicate
-         * key and threw the failure away, which also threw away every other
-         * reason it could fail. This ignores exactly the one collision that is
-         * expected.
+         * skipDuplicates rather than a swallowed error, so the one collision
+         * that is expected — a student already enrolled — is ignored without
+         * also discarding every other reason this could fail.
          */
         await tx.enrollment.createMany({
           data: subjects.map((sub) => ({ studentId: person.id, subjectId: sub.id })),

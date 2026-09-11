@@ -562,9 +562,6 @@ export const markAttendance = asyncHandler(async (req, res) => {
    * One transaction, because a session without its marks is a class that
    * counts against every student and a set of marks without their session is
    * orphaned — neither is a state this should ever be interruptible into.
-   * Mongo could not offer that here; this is the first place the move to
-   * PostgreSQL buys something the old code could not have.
-   *
    * The marks go in as a single statement rather than sixty upserts. Prisma
    * has no bulk upsert, and a loop over a class of sixty would be sixty round
    * trips inside a transaction holding locks the whole time.

@@ -7,13 +7,13 @@
  * delete is therefore torn down through here, which removes the dependants in
  * the order that keeps the database consistent at every step.
  *
- * The foreign keys that came with PostgreSQL would now cascade much of this on
- * their own, and the explicit deletes are kept anyway for two reasons. The
- * admin is shown a breakdown of exactly what was removed, which a cascade
- * cannot report. And the rule that matters most here is not a cascade at all —
- * a departing lecturer leaves their subjects standing, unassigned — so it has
- * to be expressed as an update in the middle of the sequence. The cascades
- * remain underneath as a backstop for anything this misses.
+ * The foreign keys would cascade much of this on their own, and the explicit
+ * deletes are kept anyway for two reasons. The admin is shown a breakdown of
+ * exactly what was removed, which a cascade cannot report. And the rule that
+ * matters most here is not a cascade at all — a departing lecturer leaves
+ * their subjects standing, unassigned — so it has to be expressed as an update
+ * in the middle of the sequence. The cascades remain underneath as a backstop
+ * for anything this misses.
  *
  * Each of the three runs inside one transaction. A purge touches seven tables,
  * and stopping halfway is the one outcome worse than not starting: attendance
@@ -69,10 +69,10 @@ async function purgeSubjectsIn(tx, subjectIds) {
     })
   ).count;
   /*
-   * Three references Mongo let dangle and a foreign key will not. A delegation
-   * belongs to the class it covers, so it goes; an exam paper names a subject
-   * that will not exist, so it goes; a note merely mentions one, and losing
-   * the material along with the subject would be the wrong trade.
+   * Three things that point at what is about to disappear. A delegation belongs
+   * to the class it covers, so it goes; an exam paper names a subject that will
+   * not exist, so it goes; a note merely mentions one, and losing the material
+   * along with the subject would be the wrong trade.
    */
   await tx.attendanceDelegation.deleteMany({
     where: { OR: [{ subjectId: { in: subjectIds } }, { entryId: { in: entryIds } }] },
@@ -129,11 +129,9 @@ async function purgeUsersIn(tx, userIds) {
   });
 
   /*
-   * Rows that merely name this person rather than belong to them. Mongo was
-   * content to let every one of these point at a deleted account; a foreign
-   * key is not, so each is released before the account goes. Attendance marks
-   * are the one to get right: cascading here would delete every register a
-   * departing lecturer ever took.
+   * Rows that merely name this person rather than belong to them, released
+   * before the account goes. Attendance marks are the one to get right:
+   * cascading here would delete every register a departing lecturer ever took.
    */
   await tx.classSession.updateMany({
     where: { facultyId: { in: userIds } },
@@ -226,12 +224,10 @@ async function purgeSectionIn(tx, section) {
   const extraPeriods = (await tx.timetableEntry.deleteMany({ where: { sectionId } })).count;
 
   /*
-   * Notes and exam schedules were never cleaned up here, which Mongo permitted
-   * — the section id simply dangled. A foreign key will not have that, and the
-   * obvious alternative is worse than the dangling pointer was: a null section
-   * on either of these means "the whole year can read it", so releasing them
-   * would silently widen a deleted cohort's material to everybody. They are
-   * removed with the cohort instead.
+   * Deleted with the cohort rather than released, and the distinction matters:
+   * a null section on a note or an exam schedule means "the whole year can read
+   * it", so nulling these would silently widen a deleted cohort's material to
+   * everybody.
    */
   await tx.note.deleteMany({ where: { sectionId } });
   await tx.examSchedule.deleteMany({ where: { sectionId } });

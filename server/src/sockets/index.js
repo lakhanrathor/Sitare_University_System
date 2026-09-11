@@ -23,8 +23,8 @@ export function initSocket(httpServer) {
       const token = socket.handshake.auth?.token;
       if (!token) return next(new Error('Authentication token missing'));
       const payload = verifyToken(token);
-      // A token predating the move to Postgres carries an ObjectId, which is
-      // not a uuid — refused as an expired session rather than raising.
+      // A subject that is not a uuid cannot name a row — refused as a dead
+      // session rather than allowed to raise.
       if (!isUuid(payload.sub)) return next(new Error('Invalid or expired token'));
       const user = await prisma.user.findUnique({
         where: { id: payload.sub },

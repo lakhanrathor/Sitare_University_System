@@ -76,9 +76,9 @@ export const editEntry = asyncHandler(async (req, res) => {
   const semester = timetable?.semester;
 
   /*
-   * Collected rather than written as we go: a Mongoose document accumulated
-   * edits and was saved once at the end, so the same shape is kept here with
-   * one update at the bottom instead of a write per field.
+   * Collected rather than written as we go, so a correction touching four
+   * fields is one update at the bottom instead of four round trips — and
+   * cannot half-apply if one of them is rejected.
    */
   const data = {};
   const changes = [];
@@ -815,12 +815,12 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
     const key = normName(rawName);
     if (!key) return null;
     const existing = facultyByName.get(key);
-    if (existing) return { id: existing._id, name: existing.name, isNew: false };
+    if (existing) return { id: existing.id, name: existing.name, isNew: false };
 
     // "Ms Preeti Shukla/Ms Riya Bangera" — the first named owns the subject.
     const primary = String(rawName).split(/[/,]|\s+&\s+/)[0].trim();
     const byPrimary = facultyByName.get(normName(primary));
-    if (byPrimary) return { id: byPrimary._id, name: byPrimary.name, isNew: false };
+    if (byPrimary) return { id: byPrimary.id, name: byPrimary.name, isNew: false };
 
     const slug = normName(primary)
       .replace(/\b(dr|mr|mrs|ms|prof)\b/g, '')

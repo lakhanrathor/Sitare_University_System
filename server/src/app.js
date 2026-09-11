@@ -20,11 +20,11 @@ const app = express();
 
 /*
  * Express's default query parser ('extended') turns bracket notation like
- * `?section[$ne]=1` into a nested object — which a filter such as
- * `{ section: req.query.section }` would then hand straight to MongoDB as a
- * query operator. 'simple' parses every query value as a plain string, which
- * is all any route here ever expects, and closes that class of injection
- * without touching a single controller.
+ * `?section[$ne]=1` into a nested object, which a filter such as
+ * `{ sectionId: req.query.section }` would then hand to the database as a
+ * structure rather than the value it expects. 'simple' parses every query
+ * value as a plain string, which is all any route here ever expects, and
+ * closes that class of injection without touching a single controller.
  */
 app.set('query parser', 'simple');
 

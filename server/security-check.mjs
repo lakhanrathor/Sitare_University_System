@@ -219,20 +219,23 @@ console.log('\nIDOR / resource-level authorization');
 }
 
 /* -------------------------------------------------------------- */
-/* 4. NoSQL operator injection via query string                    */
+/* 4. Query-parameter operator injection                           */
 /* -------------------------------------------------------------- */
-console.log('\nNoSQL injection');
+console.log('\nQuery-parameter injection');
 {
   const unfiltered = await call('/admin/users', {}, admin.token);
   const straight = await call('/admin/users?role=student', {}, admin.token);
   const injected = await call('/admin/users?role[$ne]=student', {}, admin.token);
 
   /*
-   * With Express's default ('extended') query parser, `role[$ne]=student`
-   * becomes `{ role: { $ne: 'student' } }` and MongoDB happily runs it as an
-   * operator — returning every non-student. With 'simple' parsing there is no
-   * nested object at all: `role` stays undefined, no filter is applied, and
+   * With Express's default ('extended') query parser, `role[not]=student`
+   * becomes the object `{ not: 'student' }`, and a filter built as
+   * `{ role: req.query.role }` would hand the database an operator rather than
+   * a value — returning every non-student. With 'simple' parsing there is no
+   * nested object at all: `role` stays a plain string, nothing matches it, and
    * the result is identical to no filter — never the attacker-chosen subset.
+   * The bracket name below is the one an attacker would try blind; what is
+   * being proven is that no bracket notation survives parsing at all.
    */
   report(
     'bracket-notation query operator applies no filter at all (not treated as $ne)',

@@ -79,7 +79,7 @@ export async function assertRegisterAccess(user, subjectId, dateKey, slot) {
 
 /** Every class this lecturer has been asked to mark for somebody else. */
 export function delegationsFor(userId) {
-  return prisma.attendanceDelegation.findMany({ where: { facultyId: idOf(userId) } });
+  return prisma.attendanceDelegation.findMany({ where: { facultyId: userId } });
 }
 
 /**
@@ -100,7 +100,7 @@ export async function sectionRef(subject) {
 /** Subjects visible to the caller, each with its conducted-class count. */
 export const listSubjects = asyncHandler(async (req, res) => {
   const { role } = req.user;
-  const _id = idOf(req.user);
+  const userId = idOf(req.user);
   let subjects;
 
   /*
@@ -108,7 +108,7 @@ export const listSubjects = asyncHandler(async (req, res) => {
    * say which dates, rather than implying they have taken over the subject.
    */
   const today = todayKey();
-  const myDelegations = role === 'faculty' ? await delegationsFor(_id) : [];
+  const myDelegations = role === 'faculty' ? await delegationsFor(userId) : [];
   const delegatedBySubject = new Map();
   for (const d of myDelegations) {
     if (d.dateKey < today) continue; // stand-in's job is done once the covered day has passed
@@ -126,7 +126,7 @@ export const listSubjects = asyncHandler(async (req, res) => {
   const myOverrides =
     role === 'faculty'
       ? await prisma.timetableEntry.findMany({
-          where: { facultyId: _id },
+          where: { facultyId: userId },
           select: { subjectId: true },
         })
       : [];
@@ -144,7 +144,7 @@ export const listSubjects = asyncHandler(async (req, res) => {
       where: {
         isActive: true,
         OR: [
-          { facultyId: _id },
+          { facultyId: userId },
           { id: { in: [...delegatedBySubject.keys()] } },
           { id: { in: overriddenSubjectIds } },
         ],
@@ -155,7 +155,7 @@ export const listSubjects = asyncHandler(async (req, res) => {
     subjects = await prisma.subject.findMany({ where: { isActive: true }, include: withRelations });
   } else {
     const enrollments = await prisma.enrollment.findMany({
-      where: { studentId: _id, isActive: true },
+      where: { studentId: userId, isActive: true },
       include: { subject: { include: withRelations } },
     });
     subjects = enrollments.map((e) => e.subject).filter(Boolean);
@@ -210,7 +210,7 @@ export const listSubjects = asyncHandler(async (req, res) => {
   const data = subjects
     .map((s) => {
       const sid = idOf(s);
-      const iOwnDefault = sameId(s.facultyId, _id);
+      const iOwnDefault = sameId(s.facultyId, userId);
       const byFaculty = dayCoverageBySubject.get(sid);
 
       /*
@@ -222,12 +222,12 @@ export const listSubjects = asyncHandler(async (req, res) => {
       if (role === 'faculty' && byFaculty) {
         if (iOwnDefault) {
           const partners = [...byFaculty.entries()]
-            .filter(([fid]) => fid !== idOf(_id))
+            .filter(([fid]) => fid !== userId)
             .map(([, v]) => ({ name: v.name, days: [...v.days].sort().map(dayName) }))
             .filter((p) => p.days.length);
           if (partners.length) coTeaching = { role: 'owner', partners };
-        } else if (byFaculty.has(idOf(_id))) {
-          const mine = byFaculty.get(idOf(_id));
+        } else if (byFaculty.has(userId)) {
+          const mine = byFaculty.get(userId);
           coTeaching = {
             role: 'partner',
             mainTeacher: s.faculty?.name || null,

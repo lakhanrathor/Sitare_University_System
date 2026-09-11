@@ -287,8 +287,7 @@ export const deleteExam = asyncHandler(async (req, res) => {
   // Nobody should keep being told about a timetable that is gone.
   await withdrawNotifications({
     type: 'exam:published',
-    // A Json column, so the key inside it is addressed by path rather than by
-    // Mongo's dotted-string notation.
+    // A Json column, so the key inside it is addressed by path.
     meta: { path: ['examId'], equals: exam.id },
   });
   // The record before the bytes: the other order leaves attachments still

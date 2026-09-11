@@ -13,7 +13,7 @@
  * Point it elsewhere with API_URL, as security-check.mjs does.
  *
  * The whole design rests on canonicalisation. Ids and dates are guaranteed
- * to differ between runs — ObjectIds are fresh on every reseed, and the
+ * to differ between runs — ids are fresh on every reseed, and the
  * fixture anchors itself to the current week — so both are replaced with
  * stable aliases before anything is written. Whatever survives that and
  * still looks like an id is a hole in the canonicaliser, and is reported
@@ -68,13 +68,14 @@ async function login(email, password) {
 /* ------------------------------------------------------------------ */
 
 /*
- * Two id shapes, because both databases are live during the migration: a
- * Mongo ObjectId from an un-ported module and a UUID from a ported one. An
- * unrecognised id survives canonicalisation and then differs on every
- * reseed, so the baseline would churn rather than catch anything.
+ * An unrecognised id survives canonicalisation and then differs on every
+ * reseed, so the baseline would churn rather than catch anything. Matched
+ * embedded as well as whole-string: a composite key like
+ * "<uuid>-2026-09-07-1" is exactly what slips past a whole-string check.
  */
-const ID_ANY = /^(?:[0-9a-f]{24}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-const ID_EMBEDDED = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{24}/gi;
+const UUID_SRC = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const ID_ANY = new RegExp(`^${UUID_SRC}$`, 'i');
+const ID_EMBEDDED = new RegExp(UUID_SRC, 'gi');
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TS = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z?$/;
 
@@ -282,9 +283,6 @@ async function collect() {
    * missed a field, and baking it in would make the baseline change on
    * every reseed for no real reason. Surface it instead of hiding it.
    */
-  // Embedded, not just whole-string — a composite key like
-  // "<objectId>-2026-09-07-1" is exactly the kind of leak that slips past a
-  // whole-string check and then churns the baseline on every reseed.
   const leaked = [...JSON.stringify(snapshot).matchAll(ID_EMBEDDED)].map((m) => m[0]);
   if (leaked.length) {
     console.error(`\n  ${leaked.length} un-aliased id(s) leaked into the snapshot, e.g. ${leaked[0]}`);

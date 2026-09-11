@@ -1,12 +1,10 @@
 /**
  * What a User record means, as plain functions rather than document methods.
  *
- * These were `userSchema.methods.*`. A method only exists on a hydrated
- * Mongoose document, which silently divides every read into two kinds: a
- * `.lean()` row has the same data but cannot answer `user.sectionId()`, and a
- * populated `req.user.section` and a bare ObjectId behave differently again.
- * A free function takes whatever shape the caller happens to hold, so the
- * caller never has to know which kind of read produced it.
+ * A plain function takes whatever shape the caller happens to hold — a row
+ * with only its scalar foreign keys, or one with the section relation included
+ * — so no caller has to know which kind of read produced it. Anything that
+ * only worked on one of those shapes would divide every read in two.
  */
 import bcrypt from 'bcryptjs';
 import { idOf } from './ids.js';
@@ -14,14 +12,13 @@ import { idOf } from './ids.js';
 /**
  * The public shape of a person — never the password hash, never internals.
  *
- * Fields that have no value are left out rather than sent as null. That is not
- * cosmetic: a Mongoose document simply has no `rollNumber` property for a
- * lecturer, so JSON.stringify dropped the key, while a database row has the
- * column with NULL in it. Emitting it would silently change the response body
- * for every account in the system — a key appearing where there was none is
- * exactly the kind of contract drift a client can be reading with `in` or
- * Object.keys. `section` is the deliberate exception: it has always been sent,
- * as null when there isn't one.
+ * Fields that have no value are left out rather than sent as null, because a
+ * row carries every column whether or not it means anything for that role — a
+ * lecturer has a `rollNumber` column holding NULL. Sending those would put a
+ * key in the response for every account in the system where there was none,
+ * which is exactly the kind of contract drift a client reading with `in` or
+ * Object.keys would trip over. `section` is the deliberate exception: it is
+ * always sent, as null when there isn't one.
  */
 export function safeUser(user) {
   if (!user) return null;
@@ -59,19 +56,18 @@ export function checkPassword(user, plain) {
 /** The section id, however the field was read. */
 export function sectionIdOf(user) {
   /*
-   * A Prisma row carries the foreign key as a scalar whether or not the
-   * relation was included, so it is both the cheaper and the more reliable
-   * answer; a Mongoose document only has the populated object or a raw id.
+   * The scalar foreign key is there whether or not the relation was included,
+   * so it is both the cheaper and the more reliable answer; the included
+   * object is only a fallback for a caller that shaped one by hand.
    */
   if (user?.sectionId !== undefined) return user.sectionId;
   return idOf(user?.section);
 }
 
 /*
- * Hashing was a Mongoose pre-save hook, which meant every write path got it
- * for free and no write path could see it. Prisma has no hook, so it is a
- * call — and the cost of forgetting one is storing a plaintext password, so
- * there is exactly one function and every password write goes through it.
+ * Every password write goes through this one function. The cost of forgetting
+ * it once is a plaintext password in the database, so there is nowhere else
+ * that decides the cost factor and nothing that hashes inline.
  */
 const ROUNDS = 10;
 

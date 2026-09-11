@@ -7,11 +7,11 @@ export function notFound(req, _res, next) {
 
 /*
  * Keyed by Prisma's error code rather than matched with a chain of ifs, so
- * adding one is a line rather than a branch. `meta.target` is the column list
- * for a unique violation — the clean replacement for Mongoose's `keyValue`.
+ * adding one is a line rather than a branch. `meta.target` carries the column
+ * list for a unique violation, which is what names the field back to the user.
  */
 const PRISMA_ERRORS = {
-  // Unique constraint — the same shape as Mongo's duplicate-key 11000.
+  // Unique constraint: two rows claiming the same email, code, or roll number.
   P2002: (err) =>
     ApiError.conflict(`Duplicate value for: ${[err.meta?.target].flat().filter(Boolean).join(', ')}`),
   // Foreign key constraint: something still points at this row, or the row it
@@ -39,15 +39,11 @@ export function errorHandler(err, _req, res, _next) {
     );
   } else if (err?.code && Object.hasOwn(PRISMA_ERRORS, err.code)) {
     /*
-     * Prisma's equivalents of the three Mongoose branches above. Without these
-     * a duplicate email is a 500 rather than a 409, and a malformed id in a
-     * URL is a 500 rather than a 400 — which is both a worse answer and, for
-     * the id, an invitation to probe: a 500 says "you broke something", a 400
-     * says "that is not an id".
-     *
-     * P2003 and P2025 have no Mongoose counterpart at all, because Mongo
-     * enforced neither foreign keys nor "this row must exist"; they appear
-     * here for the first time along with the constraints that raise them.
+     * A constraint the database refused, translated into the answer the caller
+     * should get. Without these a duplicate email is a 500 rather than a 409,
+     * and a malformed id in a URL is a 500 rather than a 400 — both worse
+     * answers, and the second an invitation to probe: a 500 says "you broke
+     * something", a 400 says "that is not an id".
      */
     error = PRISMA_ERRORS[err.code](err);
   } else if (err?.name === 'PrismaClientValidationError') {

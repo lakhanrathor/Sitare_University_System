@@ -312,10 +312,9 @@ export const deleteNote = asyncHandler(async (req, res) => {
     meta: { path: ['noteId'], equals: note.id },
   });
   /*
-   * The record first, then the bytes. Reversed — as this was — the file rows
-   * are still referenced by the attachments hanging off the note, and the
-   * foreign key refuses the delete. It only worked before because Mongo had
-   * no such reference to object to.
+   * The record first, then the bytes. Reversed, the file rows are still
+   * referenced by the attachments hanging off the note, and the foreign key
+   * refuses the delete.
    */
   await prisma.note.delete({ where: { id: note.id } });
   await deleteFiles((note.attachments || []).map((a) => a.fileId));

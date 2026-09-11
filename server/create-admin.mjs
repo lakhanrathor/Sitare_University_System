@@ -54,8 +54,8 @@ const admin = await prisma.user.create({
   data: {
     name: name.trim(),
     email,
-    // Hashed here: the pre-save hook that used to do this went with Mongoose,
-    // and hashPassword is the one place that decides the cost factor.
+    // hashPassword is the one place that decides the cost factor, so nothing
+    // ever writes a password that was hashed some other way.
     password: await hashPassword(password),
     role: 'admin',
     department: 'Administration',

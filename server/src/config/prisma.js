@@ -22,9 +22,9 @@ export const prisma = new PrismaClient({
   datasources: { db: { url: env.databaseUrl } },
 
   /*
-   * The exact equivalent of Mongoose's `select: false` on the password field:
-   * the hash is never read unless a query asks for it by name. Only the two
-   * login paths do, and they say so explicitly.
+   * The hash is never read unless a query asks for it by name. Only the two
+   * login paths do, and they say so explicitly — so no other query can leak it
+   * by forgetting to exclude it.
    */
   omit: { user: { password: true } },
 

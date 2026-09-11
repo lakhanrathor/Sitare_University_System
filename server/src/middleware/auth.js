@@ -34,12 +34,12 @@ export const protect = asyncHandler(async (req, _res, next) => {
   }
 
   /*
-   * A token issued before this module moved to Postgres carries an ObjectId,
-   * which is not a uuid and would make the query raise rather than miss. It is
-   * an expired session, so say so.
+   * A subject that is not a uuid cannot name a row, and asking anyway raises
+   * rather than missing. That is a token this server did not issue, or one
+   * from before the accounts it refers to existed — either way, a dead session.
    */
   if (!isUuid(payload.sub)) {
-    auditLog('auth_failed', { reason: 'stale_token_id', path: req.originalUrl });
+    auditLog('auth_failed', { reason: 'malformed_token_subject', path: req.originalUrl });
     throw ApiError.unauthorized('Session expired or invalid. Please sign in again.');
   }
 

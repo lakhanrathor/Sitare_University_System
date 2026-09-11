@@ -9,11 +9,6 @@
  * people. Adding an admin to a database that must not be touched otherwise
  * is what create-admin.mjs (in server/) is for.
  *
- * The index-resetting this used to do is gone, and deliberately so: it existed
- * because a stale Mongo index from an older schema version would silently
- * reject valid data long after the script finished. Migrations make an index
- * a fact about the schema rather than something a seed has to repair.
- *
  * Run:  npm run seed
  */
 import { prisma } from '../config/prisma.js';

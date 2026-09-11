@@ -66,7 +66,7 @@ const semesterOf = (entry) => entry.section?.semester ?? entry.subject?.semester
  * How to ask findConflicts about a period's cohort.
  *
  * A period on an undivided semester has no section at all — that year never
- * split — so reaching for `section._id` throws and the whole action dies with
+ * split — so reading through the section throws and the whole action dies with
  * "Cannot read properties of null". Such a period belongs to the entire year.
  */
 const cohortOf = (entry) => ({
@@ -251,8 +251,8 @@ export const listSwaps = asyncHandler(async (req, res) => {
     where,
     /*
      * status is a native enum, so this orders by the position its labels were
-     * declared in rather than alphabetically — which is the same order Mongo
-     * happened to produce here, pending before the rest.
+     * declared in rather than alphabetically — which is what puts pending, the
+     * only actionable state, at the top.
      */
     orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     take: 60,
