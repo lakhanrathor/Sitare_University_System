@@ -1,0 +1,5265 @@
+{
+  "admin/me": {
+    "status": 200,
+    "body": {
+      "user": {
+        "department": "Administration",
+        "email": "admin@sitare.org",
+        "id": "@user:admin@sitare.org",
+        "name": "System Admin",
+        "role": "admin",
+        "section": null
+      }
+    }
+  },
+  "admin/overview": {
+    "status": 200,
+    "body": {
+      "academics": {
+        "sections": 3,
+        "semesters": [
+          3,
+          5
+        ],
+        "subjects": 6,
+        "subjectsNoFaculty": []
+      },
+      "activity": {
+        "changesThisWeek": 3,
+        "sessionsThisWeek": 0
+      },
+      "people": {
+        "admins": 1,
+        "faculty": 3,
+        "students": 7
+      },
+      "timetables": {
+        "drafts": 0,
+        "missingTimetables": [],
+        "published": [
+          {
+            "effectiveFrom": "@d-28",
+            "entryCount": 11,
+            "id": "@timetable:sem3",
+            "name": "Semester 3 — Fixture Grid",
+            "semester": 3
+          },
+          {
+            "effectiveFrom": "@d-28",
+            "entryCount": 2,
+            "id": "@timetable:sem5",
+            "name": "Semester 5 — Fixture Grid",
+            "semester": 5
+          }
+        ]
+      },
+      "todo": {
+        "missingTimetables": 0,
+        "pendingSwaps": 1,
+        "subjectsNoFaculty": 0,
+        "unassignedStudents": 0
+      }
+    }
+  },
+  "admin/users": {
+    "status": 200,
+    "body": [
+      {
+        "batch": null,
+        "createdAt": "@ts",
+        "department": "Administration",
+        "email": "admin@sitare.org",
+        "employeeId": null,
+        "id": "@user:admin@sitare.org",
+        "isActive": true,
+        "name": "System Admin",
+        "role": "admin",
+        "rollNumber": null,
+        "section": null,
+        "semester": null
+      },
+      {
+        "batch": null,
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "ananya.rao@sitare.org",
+        "employeeId": "FAC-001",
+        "id": "@user:ananya.rao@sitare.org",
+        "isActive": true,
+        "name": "Dr Ananya Rao",
+        "role": "faculty",
+        "rollNumber": null,
+        "section": null,
+        "semester": null
+      },
+      {
+        "batch": null,
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "vikram.iyer@sitare.org",
+        "employeeId": "FAC-002",
+        "id": "@user:vikram.iyer@sitare.org",
+        "isActive": true,
+        "name": "Mr Vikram Iyer",
+        "role": "faculty",
+        "rollNumber": null,
+        "section": null,
+        "semester": null
+      },
+      {
+        "batch": null,
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "meera.nair@sitare.org",
+        "employeeId": "FAC-003",
+        "id": "@user:meera.nair@sitare.org",
+        "isActive": true,
+        "name": "Ms Meera Nair",
+        "role": "faculty",
+        "rollNumber": null,
+        "section": null,
+        "semester": null
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30001@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30001@sitare.org",
+        "isActive": true,
+        "name": "Aarav Sharma",
+        "role": "student",
+        "rollNumber": "2024CS30001",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30002@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30002@sitare.org",
+        "isActive": true,
+        "name": "Diya Patel",
+        "role": "student",
+        "rollNumber": "2024CS30002",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30003@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30003@sitare.org",
+        "isActive": true,
+        "name": "Kabir Menon",
+        "role": "student",
+        "rollNumber": "2024CS30003",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30011@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30011@sitare.org",
+        "isActive": true,
+        "name": "Ishaan Gupta",
+        "role": "student",
+        "rollNumber": "2024CS30011",
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30012@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30012@sitare.org",
+        "isActive": true,
+        "name": "Ananya Singh",
+        "role": "student",
+        "rollNumber": "2024CS30012",
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-50001@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-50001@sitare.org",
+        "isActive": true,
+        "name": "Rhea Kapoor",
+        "role": "student",
+        "rollNumber": "2024CS50001",
+        "section": {
+          "id": "@section:all/sem5",
+          "name": ""
+        },
+        "semester": 5
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-50002@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-50002@sitare.org",
+        "isActive": true,
+        "name": "Arjun Desai",
+        "role": "student",
+        "rollNumber": "2024CS50002",
+        "section": {
+          "id": "@section:all/sem5",
+          "name": ""
+        },
+        "semester": 5
+      }
+    ]
+  },
+  "admin/users?role=student": {
+    "status": 200,
+    "body": [
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30001@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30001@sitare.org",
+        "isActive": true,
+        "name": "Aarav Sharma",
+        "role": "student",
+        "rollNumber": "2024CS30001",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30002@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30002@sitare.org",
+        "isActive": true,
+        "name": "Diya Patel",
+        "role": "student",
+        "rollNumber": "2024CS30002",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30003@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30003@sitare.org",
+        "isActive": true,
+        "name": "Kabir Menon",
+        "role": "student",
+        "rollNumber": "2024CS30003",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30011@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30011@sitare.org",
+        "isActive": true,
+        "name": "Ishaan Gupta",
+        "role": "student",
+        "rollNumber": "2024CS30011",
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30012@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30012@sitare.org",
+        "isActive": true,
+        "name": "Ananya Singh",
+        "role": "student",
+        "rollNumber": "2024CS30012",
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-50001@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-50001@sitare.org",
+        "isActive": true,
+        "name": "Rhea Kapoor",
+        "role": "student",
+        "rollNumber": "2024CS50001",
+        "section": {
+          "id": "@section:all/sem5",
+          "name": ""
+        },
+        "semester": 5
+      },
+      {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-50002@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-50002@sitare.org",
+        "isActive": true,
+        "name": "Arjun Desai",
+        "role": "student",
+        "rollNumber": "2024CS50002",
+        "section": {
+          "id": "@section:all/sem5",
+          "name": ""
+        },
+        "semester": 5
+      }
+    ]
+  },
+  "admin/users?role=faculty": {
+    "status": 200,
+    "body": [
+      {
+        "batch": null,
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "ananya.rao@sitare.org",
+        "employeeId": "FAC-001",
+        "id": "@user:ananya.rao@sitare.org",
+        "isActive": true,
+        "name": "Dr Ananya Rao",
+        "role": "faculty",
+        "rollNumber": null,
+        "section": null,
+        "semester": null
+      },
+      {
+        "batch": null,
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "vikram.iyer@sitare.org",
+        "employeeId": "FAC-002",
+        "id": "@user:vikram.iyer@sitare.org",
+        "isActive": true,
+        "name": "Mr Vikram Iyer",
+        "role": "faculty",
+        "rollNumber": null,
+        "section": null,
+        "semester": null
+      },
+      {
+        "batch": null,
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "meera.nair@sitare.org",
+        "employeeId": "FAC-003",
+        "id": "@user:meera.nair@sitare.org",
+        "isActive": true,
+        "name": "Ms Meera Nair",
+        "role": "faculty",
+        "rollNumber": null,
+        "section": null,
+        "semester": null
+      }
+    ]
+  },
+  "admin/users?deactivatedOnly": {
+    "status": 200,
+    "body": [
+      {
+        "batch": null,
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "retired.lecturer@sitare.org",
+        "employeeId": "FAC-099",
+        "id": "@id:1",
+        "isActive": false,
+        "name": "Dr Retired Lecturer",
+        "role": "faculty",
+        "rollNumber": null,
+        "section": null,
+        "semester": null
+      }
+    ]
+  },
+  "admin/users?withAttendance": {
+    "status": 200,
+    "body": [
+      {
+        "attendance": {
+          "absent": 0,
+          "conducted": 3,
+          "percentage": 100,
+          "present": 3
+        },
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30001@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30001@sitare.org",
+        "isActive": true,
+        "name": "Aarav Sharma",
+        "role": "student",
+        "rollNumber": "2024CS30001",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "attendance": {
+          "absent": 1,
+          "conducted": 3,
+          "percentage": 66.67,
+          "present": 2
+        },
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30002@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30002@sitare.org",
+        "isActive": true,
+        "name": "Diya Patel",
+        "role": "student",
+        "rollNumber": "2024CS30002",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "attendance": {
+          "absent": 0,
+          "conducted": 1,
+          "percentage": 100,
+          "present": 1
+        },
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30003@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30003@sitare.org",
+        "isActive": true,
+        "name": "Kabir Menon",
+        "role": "student",
+        "rollNumber": "2024CS30003",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "attendance": null,
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30011@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30011@sitare.org",
+        "isActive": true,
+        "name": "Ishaan Gupta",
+        "role": "student",
+        "rollNumber": "2024CS30011",
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3
+      },
+      {
+        "attendance": null,
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30012@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30012@sitare.org",
+        "isActive": true,
+        "name": "Ananya Singh",
+        "role": "student",
+        "rollNumber": "2024CS30012",
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3
+      },
+      {
+        "attendance": null,
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-50001@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-50001@sitare.org",
+        "isActive": true,
+        "name": "Rhea Kapoor",
+        "role": "student",
+        "rollNumber": "2024CS50001",
+        "section": {
+          "id": "@section:all/sem5",
+          "name": ""
+        },
+        "semester": 5
+      },
+      {
+        "attendance": null,
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-50002@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-50002@sitare.org",
+        "isActive": true,
+        "name": "Arjun Desai",
+        "role": "student",
+        "rollNumber": "2024CS50002",
+        "section": {
+          "id": "@section:all/sem5",
+          "name": ""
+        },
+        "semester": 5
+      }
+    ]
+  },
+  "admin/faculty": {
+    "status": 200,
+    "body": [
+      {
+        "email": "ananya.rao@sitare.org",
+        "employeeId": "FAC-001",
+        "id": "@user:ananya.rao@sitare.org",
+        "name": "Dr Ananya Rao",
+        "periodsPerWeek": 7,
+        "subjectCount": 3,
+        "subjects": [
+          "DBMS · Sec A",
+          "DSA · Sec A",
+          "PROF · Sec —"
+        ]
+      },
+      {
+        "email": "vikram.iyer@sitare.org",
+        "employeeId": "FAC-002",
+        "id": "@user:vikram.iyer@sitare.org",
+        "name": "Mr Vikram Iyer",
+        "periodsPerWeek": 3,
+        "subjectCount": 2,
+        "subjects": [
+          "CN · Sec B",
+          "OS · Sec B"
+        ]
+      },
+      {
+        "email": "meera.nair@sitare.org",
+        "employeeId": "FAC-003",
+        "id": "@user:meera.nair@sitare.org",
+        "name": "Ms Meera Nair",
+        "periodsPerWeek": 2,
+        "subjectCount": 1,
+        "subjects": [
+          "ML · Sec "
+        ]
+      }
+    ]
+  },
+  "admin/sections": {
+    "status": 200,
+    "body": [
+      {
+        "department": "Computer Science",
+        "id": "@section:A/sem3",
+        "isActive": true,
+        "label": "Section A",
+        "name": "A",
+        "semester": 3,
+        "studentCount": 3,
+        "subjectCount": 2
+      },
+      {
+        "department": "Computer Science",
+        "id": "@section:B/sem3",
+        "isActive": true,
+        "label": "Section B",
+        "name": "B",
+        "semester": 3,
+        "studentCount": 2,
+        "subjectCount": 2
+      },
+      {
+        "department": "Computer Science",
+        "id": "@section:all/sem5",
+        "isActive": true,
+        "label": "All students",
+        "name": "",
+        "semester": 5,
+        "studentCount": 2,
+        "subjectCount": 1
+      }
+    ]
+  },
+  "admin/subjects": {
+    "status": 200,
+    "body": [
+      {
+        "code": "CN",
+        "conducted": 0,
+        "credits": 3,
+        "enrolledCount": 2,
+        "faculty": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        },
+        "facultyLabel": "Mr Vikram Iyer",
+        "id": "@subject:CN/B",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Computer Networks",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3
+      },
+      {
+        "code": "DBMS",
+        "conducted": 0,
+        "credits": 3,
+        "enrolledCount": 3,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "facultyLabel": "Dr Ananya Rao",
+        "id": "@subject:DBMS/A",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Database Management Systems",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "code": "DSA",
+        "conducted": 3,
+        "credits": 3,
+        "enrolledCount": 3,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "facultyLabel": "Dr Ananya Rao",
+        "id": "@subject:DSA/A",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Data Structures and Algorithms",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "code": "OS",
+        "conducted": 0,
+        "credits": 3,
+        "enrolledCount": 2,
+        "faculty": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        },
+        "facultyLabel": "Mr Vikram Iyer",
+        "id": "@subject:OS/B",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Operating Systems",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3
+      },
+      {
+        "code": "PROF",
+        "conducted": 0,
+        "credits": 3,
+        "enrolledCount": 5,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "facultyLabel": "Dr Ananya Rao",
+        "id": "@subject:PROF/all",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Professional Ethics",
+        "plannedClasses": 30,
+        "section": null,
+        "semester": 3
+      },
+      {
+        "code": "ML",
+        "conducted": 0,
+        "credits": 3,
+        "enrolledCount": 2,
+        "faculty": {
+          "id": "@user:meera.nair@sitare.org",
+          "name": "Ms Meera Nair"
+        },
+        "facultyLabel": "Ms Meera Nair",
+        "id": "@subject:ML/all",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Machine Learning",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:all/sem5",
+          "name": ""
+        },
+        "semester": 5
+      }
+    ]
+  },
+  "admin/subjects?semester=3": {
+    "status": 200,
+    "body": [
+      {
+        "code": "CN",
+        "conducted": 0,
+        "credits": 3,
+        "enrolledCount": 2,
+        "faculty": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        },
+        "facultyLabel": "Mr Vikram Iyer",
+        "id": "@subject:CN/B",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Computer Networks",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3
+      },
+      {
+        "code": "DBMS",
+        "conducted": 0,
+        "credits": 3,
+        "enrolledCount": 3,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "facultyLabel": "Dr Ananya Rao",
+        "id": "@subject:DBMS/A",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Database Management Systems",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "code": "DSA",
+        "conducted": 3,
+        "credits": 3,
+        "enrolledCount": 3,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "facultyLabel": "Dr Ananya Rao",
+        "id": "@subject:DSA/A",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Data Structures and Algorithms",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      {
+        "code": "OS",
+        "conducted": 0,
+        "credits": 3,
+        "enrolledCount": 2,
+        "faculty": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        },
+        "facultyLabel": "Mr Vikram Iyer",
+        "id": "@subject:OS/B",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Operating Systems",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3
+      },
+      {
+        "code": "PROF",
+        "conducted": 0,
+        "credits": 3,
+        "enrolledCount": 5,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "facultyLabel": "Dr Ananya Rao",
+        "id": "@subject:PROF/all",
+        "isActive": true,
+        "minAttendance": 75,
+        "name": "Professional Ethics",
+        "plannedClasses": 30,
+        "section": null,
+        "semester": 3
+      }
+    ]
+  },
+  "admin/subjects/:dsa/roster": {
+    "status": 200,
+    "body": {
+      "available": [],
+      "enrolled": [
+        {
+          "id": "@user:su-30001@sitare.org",
+          "name": "Aarav Sharma",
+          "rollNumber": "2024CS30001"
+        },
+        {
+          "id": "@user:su-30002@sitare.org",
+          "name": "Diya Patel",
+          "rollNumber": "2024CS30002"
+        },
+        {
+          "id": "@user:su-30003@sitare.org",
+          "name": "Kabir Menon",
+          "rollNumber": "2024CS30003"
+        }
+      ],
+      "subject": {
+        "code": "DSA",
+        "id": "@subject:DSA/A",
+        "name": "Data Structures and Algorithms"
+      }
+    }
+  },
+  "admin/students/:kabir": {
+    "status": 200,
+    "body": {
+      "documentCount": 0,
+      "overall": {
+        "absent": 2,
+        "conducted": 3,
+        "minAttendance": 75,
+        "percentage": 33.33,
+        "present": 1,
+        "status": "critical",
+        "subjectCount": 3,
+        "totalPlanned": 90
+      },
+      "student": {
+        "batch": "2024",
+        "createdAt": "@ts",
+        "department": "Computer Science",
+        "email": "su-30003@sitare.org",
+        "employeeId": null,
+        "id": "@user:su-30003@sitare.org",
+        "isActive": true,
+        "name": "Kabir Menon",
+        "role": "student",
+        "rollNumber": "2024CS30003",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      "subjects": [
+        {
+          "absent": 0,
+          "code": "DBMS",
+          "conducted": 0,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Database Management Systems",
+          "percentage": null,
+          "plannedClasses": 30,
+          "present": 0,
+          "status": "no-data",
+          "subjectId": "@subject:DBMS/A"
+        },
+        {
+          "absent": 2,
+          "code": "DSA",
+          "conducted": 3,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Data Structures and Algorithms",
+          "percentage": 33.33,
+          "plannedClasses": 30,
+          "present": 1,
+          "status": "critical",
+          "subjectId": "@subject:DSA/A"
+        },
+        {
+          "absent": 0,
+          "code": "PROF",
+          "conducted": 0,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Professional Ethics",
+          "percentage": null,
+          "plannedClasses": 30,
+          "present": 0,
+          "status": "no-data",
+          "subjectId": "@subject:PROF/all"
+        }
+      ]
+    }
+  },
+  "admin/students/:kabir/leave": {
+    "status": 200,
+    "body": []
+  },
+  "admin/subjects(list)": {
+    "status": 200,
+    "body": [
+      {
+        "coTeaching": null,
+        "code": "CN",
+        "conducted": 0,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 2,
+        "faculty": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        },
+        "id": "@subject:CN/B",
+        "minAttendance": 75,
+        "name": "Computer Networks",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3,
+        "standingIn": null
+      },
+      {
+        "coTeaching": null,
+        "code": "DBMS",
+        "conducted": 0,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 3,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "id": "@subject:DBMS/A",
+        "minAttendance": 75,
+        "name": "Database Management Systems",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3,
+        "standingIn": null
+      },
+      {
+        "coTeaching": null,
+        "code": "DSA",
+        "conducted": 3,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 3,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "id": "@subject:DSA/A",
+        "minAttendance": 75,
+        "name": "Data Structures and Algorithms",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3,
+        "standingIn": null
+      },
+      {
+        "coTeaching": null,
+        "code": "OS",
+        "conducted": 0,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 2,
+        "faculty": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        },
+        "id": "@subject:OS/B",
+        "minAttendance": 75,
+        "name": "Operating Systems",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3,
+        "standingIn": null
+      },
+      {
+        "coTeaching": null,
+        "code": "PROF",
+        "conducted": 0,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 5,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "id": "@subject:PROF/all",
+        "minAttendance": 75,
+        "name": "Professional Ethics",
+        "plannedClasses": 30,
+        "section": null,
+        "semester": 3,
+        "standingIn": null
+      },
+      {
+        "coTeaching": null,
+        "code": "ML",
+        "conducted": 0,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 2,
+        "faculty": {
+          "id": "@user:meera.nair@sitare.org",
+          "name": "Ms Meera Nair"
+        },
+        "id": "@subject:ML/all",
+        "minAttendance": 75,
+        "name": "Machine Learning",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:all/sem5",
+          "name": ""
+        },
+        "semester": 5,
+        "standingIn": null
+      }
+    ]
+  },
+  "admin/subject/:dsa": {
+    "status": 200,
+    "body": {
+      "conducted": 3,
+      "students": [
+        {
+          "absent": 0,
+          "batch": "2024",
+          "email": "su-30001@sitare.org",
+          "name": "Aarav Sharma",
+          "percentage": 100,
+          "present": 3,
+          "rollNumber": "2024CS30001",
+          "studentId": "@user:su-30001@sitare.org"
+        },
+        {
+          "absent": 1,
+          "batch": "2024",
+          "email": "su-30002@sitare.org",
+          "name": "Diya Patel",
+          "percentage": 66.67,
+          "present": 2,
+          "rollNumber": "2024CS30002",
+          "studentId": "@user:su-30002@sitare.org"
+        },
+        {
+          "absent": 2,
+          "batch": "2024",
+          "email": "su-30003@sitare.org",
+          "name": "Kabir Menon",
+          "percentage": 33.33,
+          "present": 1,
+          "rollNumber": "2024CS30003",
+          "studentId": "@user:su-30003@sitare.org"
+        }
+      ],
+      "subject": {
+        "code": "DSA",
+        "id": "@subject:DSA/A",
+        "minAttendance": 75,
+        "name": "Data Structures and Algorithms",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      }
+    }
+  },
+  "admin/attendance/student/:aarav": {
+    "status": 200,
+    "body": {
+      "overall": {
+        "absent": 0,
+        "conducted": 3,
+        "minAttendance": 75,
+        "percentage": 100,
+        "present": 3,
+        "status": "good",
+        "subjectCount": 3,
+        "totalPlanned": 90
+      },
+      "student": {
+        "batch": "2024",
+        "department": "Computer Science",
+        "email": "su-30001@sitare.org",
+        "id": "@user:su-30001@sitare.org",
+        "name": "Aarav Sharma",
+        "role": "student",
+        "rollNumber": "2024CS30001",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": null
+        },
+        "semester": 3
+      },
+      "subjects": [
+        {
+          "absent": 0,
+          "code": "DBMS",
+          "conducted": 0,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Database Management Systems",
+          "percentage": null,
+          "plannedClasses": 30,
+          "present": 0,
+          "status": "no-data",
+          "subjectId": "@subject:DBMS/A"
+        },
+        {
+          "absent": 0,
+          "code": "DSA",
+          "conducted": 3,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Data Structures and Algorithms",
+          "percentage": 100,
+          "plannedClasses": 30,
+          "present": 3,
+          "status": "good",
+          "subjectId": "@subject:DSA/A"
+        },
+        {
+          "absent": 0,
+          "code": "PROF",
+          "conducted": 0,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Professional Ethics",
+          "percentage": null,
+          "plannedClasses": 30,
+          "present": 0,
+          "status": "no-data",
+          "subjectId": "@subject:PROF/all"
+        }
+      ]
+    }
+  },
+  "admin/attendance/student/:kabir": {
+    "status": 200,
+    "body": {
+      "overall": {
+        "absent": 2,
+        "conducted": 3,
+        "minAttendance": 75,
+        "percentage": 33.33,
+        "present": 1,
+        "status": "critical",
+        "subjectCount": 3,
+        "totalPlanned": 90
+      },
+      "student": {
+        "batch": "2024",
+        "department": "Computer Science",
+        "email": "su-30003@sitare.org",
+        "id": "@user:su-30003@sitare.org",
+        "name": "Kabir Menon",
+        "role": "student",
+        "rollNumber": "2024CS30003",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": null
+        },
+        "semester": 3
+      },
+      "subjects": [
+        {
+          "absent": 0,
+          "code": "DBMS",
+          "conducted": 0,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Database Management Systems",
+          "percentage": null,
+          "plannedClasses": 30,
+          "present": 0,
+          "status": "no-data",
+          "subjectId": "@subject:DBMS/A"
+        },
+        {
+          "absent": 2,
+          "code": "DSA",
+          "conducted": 3,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Data Structures and Algorithms",
+          "percentage": 33.33,
+          "plannedClasses": 30,
+          "present": 1,
+          "status": "critical",
+          "subjectId": "@subject:DSA/A"
+        },
+        {
+          "absent": 0,
+          "code": "PROF",
+          "conducted": 0,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Professional Ethics",
+          "percentage": null,
+          "plannedClasses": 30,
+          "present": 0,
+          "status": "no-data",
+          "subjectId": "@subject:PROF/all"
+        }
+      ]
+    }
+  },
+  "admin/sessions/:dsa": {
+    "status": 200,
+    "body": {
+      "conducted": 3,
+      "enrolledCount": 3,
+      "plannedClasses": 30,
+      "sessions": [
+        {
+          "date": "@d-5",
+          "id": "@id:2",
+          "presentCount": 3,
+          "slot": 1,
+          "status": "completed",
+          "topic": "Queues",
+          "totalMarked": 3
+        },
+        {
+          "date": "@d-7",
+          "id": "@id:3",
+          "presentCount": 0,
+          "slot": 1,
+          "status": "cancelled",
+          "topic": "Stacks",
+          "totalMarked": 0
+        },
+        {
+          "date": "@d-12",
+          "id": "@id:4",
+          "presentCount": 2,
+          "slot": 1,
+          "status": "completed",
+          "topic": "Linked lists",
+          "totalMarked": 2
+        },
+        {
+          "date": "@d-14",
+          "id": "@id:5",
+          "presentCount": 1,
+          "slot": 1,
+          "status": "completed",
+          "topic": "Arrays",
+          "totalMarked": 2
+        }
+      ]
+    }
+  },
+  "admin/occurrences/:dsa": {
+    "status": 200,
+    "body": {
+      "conducted": 3,
+      "occurrences": [
+        {
+          "date": "@d+16",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+14",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+14",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+9",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+7",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+7",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+2",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d+0",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-5",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "presentCount": 3,
+          "reason": "",
+          "sessionId": "@id:2",
+          "sessionStatus": "completed",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": true,
+          "topic": "Queues",
+          "totalMarked": 3
+        },
+        {
+          "date": "@d-7",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-7",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "presentCount": 0,
+          "reason": "",
+          "sessionId": "@id:3",
+          "sessionStatus": "cancelled",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": true,
+          "topic": "Stacks",
+          "totalMarked": 0
+        },
+        {
+          "date": "@d-12",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "presentCount": 2,
+          "reason": "",
+          "sessionId": "@id:4",
+          "sessionStatus": "completed",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": true,
+          "topic": "Linked lists",
+          "totalMarked": 2
+        },
+        {
+          "date": "@d-14",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-14",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "presentCount": 1,
+          "reason": "",
+          "sessionId": "@id:5",
+          "sessionStatus": "completed",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": true,
+          "topic": "Arrays",
+          "totalMarked": 2
+        },
+        {
+          "date": "@d-19",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-21",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-21",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-26",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-28",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-28",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        }
+      ],
+      "pending": 10,
+      "subject": {
+        "code": "DSA",
+        "id": "@subject:DSA/A",
+        "name": "Data Structures and Algorithms",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      "today": "@d+4"
+    }
+  },
+  "admin/timetable/meta": {
+    "status": 200,
+    "body": {
+      "days": [
+        {
+          "day": 1,
+          "name": "Monday",
+          "short": "Mon",
+          "teaching": true
+        },
+        {
+          "day": 2,
+          "name": "Tuesday",
+          "short": "Tue",
+          "teaching": true
+        },
+        {
+          "day": 3,
+          "name": "Wednesday",
+          "short": "Wed",
+          "teaching": true
+        },
+        {
+          "day": 4,
+          "name": "Thursday",
+          "short": "Thu",
+          "teaching": true
+        },
+        {
+          "day": 5,
+          "name": "Friday",
+          "short": "Fri",
+          "teaching": true
+        },
+        {
+          "day": 6,
+          "name": "Saturday",
+          "short": "Sat",
+          "teaching": true
+        },
+        {
+          "day": 7,
+          "name": "Sunday",
+          "short": "Sun",
+          "teaching": false
+        }
+      ],
+      "lunch": {
+        "afterSlot": 3,
+        "end": "13:30",
+        "label": "LUNCH",
+        "start": "12:30"
+      },
+      "sections": [
+        {
+          "id": "@section:A/sem3",
+          "name": "A",
+          "semester": 3
+        },
+        {
+          "id": "@section:B/sem3",
+          "name": "B",
+          "semester": 3
+        },
+        {
+          "id": "@section:all/sem5",
+          "name": "",
+          "semester": 5
+        }
+      ],
+      "semesters": [
+        {
+          "lunch": {
+            "afterSlot": 3,
+            "end": "13:30",
+            "label": "LUNCH",
+            "start": "12:30"
+          },
+          "name": "Semester 3 — Fixture Grid",
+          "sectionCount": 2,
+          "semester": 3,
+          "slots": [
+            {
+              "end": "09:55",
+              "label": "9:00 - 9:55",
+              "slot": 1,
+              "start": "09:00"
+            },
+            {
+              "end": "10:55",
+              "label": "10:00 - 10:55",
+              "slot": 2,
+              "start": "10:00"
+            },
+            {
+              "end": "11:55",
+              "label": "11:00 - 11:55",
+              "slot": 3,
+              "start": "11:00"
+            },
+            {
+              "end": "14:25",
+              "label": "1:30 - 2:25",
+              "slot": 4,
+              "start": "13:30"
+            },
+            {
+              "end": "15:25",
+              "label": "2:30 - 3:25",
+              "slot": 5,
+              "start": "14:30"
+            },
+            {
+              "end": "16:25",
+              "label": "3:30 - 4:25",
+              "slot": 6,
+              "start": "15:30"
+            }
+          ],
+          "timetableId": "@timetable:sem3"
+        },
+        {
+          "lunch": {
+            "afterSlot": 3,
+            "end": "13:30",
+            "label": "LUNCH",
+            "start": "12:30"
+          },
+          "name": "Semester 5 — Fixture Grid",
+          "sectionCount": 1,
+          "semester": 5,
+          "slots": [
+            {
+              "end": "09:55",
+              "label": "9:00 - 9:55",
+              "slot": 1,
+              "start": "09:00"
+            },
+            {
+              "end": "10:55",
+              "label": "10:00 - 10:55",
+              "slot": 2,
+              "start": "10:00"
+            },
+            {
+              "end": "11:55",
+              "label": "11:00 - 11:55",
+              "slot": 3,
+              "start": "11:00"
+            },
+            {
+              "end": "14:25",
+              "label": "1:30 - 2:25",
+              "slot": 4,
+              "start": "13:30"
+            },
+            {
+              "end": "15:25",
+              "label": "2:30 - 3:25",
+              "slot": 5,
+              "start": "14:30"
+            },
+            {
+              "end": "16:25",
+              "label": "3:30 - 4:25",
+              "slot": 6,
+              "start": "15:30"
+            }
+          ],
+          "timetableId": "@timetable:sem5"
+        }
+      ],
+      "slots": [
+        {
+          "end": "09:55",
+          "label": "9:00 - 9:55",
+          "slot": 1,
+          "start": "09:00"
+        },
+        {
+          "end": "10:55",
+          "label": "10:00 - 10:55",
+          "slot": 2,
+          "start": "10:00"
+        },
+        {
+          "end": "11:55",
+          "label": "11:00 - 11:55",
+          "slot": 3,
+          "start": "11:00"
+        },
+        {
+          "end": "14:25",
+          "label": "1:30 - 2:25",
+          "slot": 4,
+          "start": "13:30"
+        },
+        {
+          "end": "15:25",
+          "label": "2:30 - 3:25",
+          "slot": 5,
+          "start": "14:30"
+        },
+        {
+          "end": "16:25",
+          "label": "3:30 - 4:25",
+          "slot": 6,
+          "start": "15:30"
+        }
+      ]
+    }
+  },
+  "admin/timetable/week/sem3": {
+    "status": 200,
+    "body": {
+      "days": [
+        {
+          "date": "@d+0",
+          "dayOfWeek": 1,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": "@id:6",
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:7",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:7-@d+0-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "cancelled",
+              "reason": "Lecturer on duty leave",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:8",
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:8-@d+0-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "OS",
+                "id": "@subject:OS/B",
+                "minAttendance": 75,
+                "name": "Operating Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:9",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:9-@d+0-2",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 2,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+1",
+          "dayOfWeek": 2,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": "@id:10",
+              "createdBy": null,
+              "date": "@d+1",
+              "entryId": "@id:11",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:11-@d+1-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": {
+                "date": "@d+3",
+                "slot": 5
+              },
+              "origin": "moved-out",
+              "reason": "Clashed with a guest lecture",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "DBMS",
+                "id": "@subject:DBMS/A",
+                "minAttendance": 75,
+                "name": "Database Management Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+1",
+              "entryId": "@id:12",
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:12-@d+1-2",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 2,
+              "subject": {
+                "code": "OS",
+                "id": "@subject:OS/B",
+                "minAttendance": 75,
+                "name": "Operating Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+2",
+          "dayOfWeek": 3,
+          "occurrences": [
+            {
+              "attendanceBy": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+2",
+              "entryId": "@id:13",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:13-@d+2-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+2",
+              "entryId": "@id:14",
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:14-@d+2-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "CN",
+                "id": "@subject:CN/B",
+                "minAttendance": 75,
+                "name": "Computer Networks"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+3",
+          "dayOfWeek": 4,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+3",
+              "entryId": "@id:15",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:15-@d+3-2",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 2,
+              "subject": {
+                "code": "DBMS",
+                "id": "@subject:DBMS/A",
+                "minAttendance": 75,
+                "name": "Database Management Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+3",
+              "entryId": "@id:16",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:16-@d+3-3",
+              "kind": "office-hours",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 3,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": "@id:10",
+              "createdBy": "@user:admin@sitare.org",
+              "date": "@d+3",
+              "entryId": "@id:11",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:11-@d+3-5",
+              "kind": "lecture",
+              "movedFrom": {
+                "date": "@d+1",
+                "slot": 1
+              },
+              "movedTo": null,
+              "origin": "moved-in",
+              "reason": "Clashed with a guest lecture",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 5,
+              "subject": {
+                "code": "DBMS",
+                "id": "@subject:DBMS/A",
+                "minAttendance": 75,
+                "name": "Database Management Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+4",
+          "dayOfWeek": 5,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+4",
+              "entryId": "@id:17",
+              "faculty": null,
+              "id": "@id:17-@d+4-1",
+              "kind": "event",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": null,
+              "swapRequest": null,
+              "title": "Session with Dean"
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+4",
+              "entryId": "@id:18",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:18-@d+4-3",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": null,
+              "semester": 3,
+              "slot": 3,
+              "subject": {
+                "code": "PROF",
+                "id": "@subject:PROF/all",
+                "minAttendance": 75,
+                "name": "Professional Ethics"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": "@id:19",
+              "createdBy": "@user:vikram.iyer@sitare.org",
+              "date": "@d+4",
+              "entryId": null,
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:19-@d+4-6",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "extra",
+              "reason": "Revision before the mid-term",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 6,
+              "subject": {
+                "code": "OS",
+                "id": "@subject:OS/B",
+                "minAttendance": 75,
+                "name": "Operating Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+5",
+          "dayOfWeek": 6,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+6",
+          "dayOfWeek": 7,
+          "occurrences": [],
+          "teaching": false
+        }
+      ],
+      "lunch": {
+        "afterSlot": 3,
+        "end": "13:30",
+        "label": "LUNCH",
+        "start": "12:30"
+      },
+      "scopedToSection": null,
+      "sectionSplit": true,
+      "semester": 3,
+      "slots": [
+        {
+          "end": "09:55",
+          "label": "9:00 - 9:55",
+          "slot": 1,
+          "start": "09:00"
+        },
+        {
+          "end": "10:55",
+          "label": "10:00 - 10:55",
+          "slot": 2,
+          "start": "10:00"
+        },
+        {
+          "end": "11:55",
+          "label": "11:00 - 11:55",
+          "slot": 3,
+          "start": "11:00"
+        },
+        {
+          "end": "14:25",
+          "label": "1:30 - 2:25",
+          "slot": 4,
+          "start": "13:30"
+        },
+        {
+          "end": "15:25",
+          "label": "2:30 - 3:25",
+          "slot": 5,
+          "start": "14:30"
+        },
+        {
+          "end": "16:25",
+          "label": "3:30 - 4:25",
+          "slot": 6,
+          "start": "15:30"
+        }
+      ],
+      "timetable": {
+        "effectiveFrom": "@d-28",
+        "id": "@timetable:sem3",
+        "name": "Semester 3 — Fixture Grid",
+        "semester": 3,
+        "status": "published"
+      },
+      "weekStart": "@d+0"
+    }
+  },
+  "admin/timetable/week/sem5": {
+    "status": 200,
+    "body": {
+      "days": [
+        {
+          "date": "@d+0",
+          "dayOfWeek": 1,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:20",
+              "faculty": {
+                "email": "meera.nair@sitare.org",
+                "id": "@user:meera.nair@sitare.org",
+                "name": "Ms Meera Nair"
+              },
+              "id": "@id:20-@d+0-4",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:all/sem5",
+                "name": ""
+              },
+              "semester": 5,
+              "slot": 4,
+              "subject": {
+                "code": "ML",
+                "id": "@subject:ML/all",
+                "minAttendance": 75,
+                "name": "Machine Learning"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+1",
+          "dayOfWeek": 2,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+2",
+          "dayOfWeek": 3,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+2",
+              "entryId": "@id:21",
+              "faculty": {
+                "email": "meera.nair@sitare.org",
+                "id": "@user:meera.nair@sitare.org",
+                "name": "Ms Meera Nair"
+              },
+              "id": "@id:21-@d+2-4",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:all/sem5",
+                "name": ""
+              },
+              "semester": 5,
+              "slot": 4,
+              "subject": {
+                "code": "ML",
+                "id": "@subject:ML/all",
+                "minAttendance": 75,
+                "name": "Machine Learning"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+3",
+          "dayOfWeek": 4,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+4",
+          "dayOfWeek": 5,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+5",
+          "dayOfWeek": 6,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+6",
+          "dayOfWeek": 7,
+          "occurrences": [],
+          "teaching": false
+        }
+      ],
+      "lunch": {
+        "afterSlot": 3,
+        "end": "13:30",
+        "label": "LUNCH",
+        "start": "12:30"
+      },
+      "scopedToSection": null,
+      "sectionSplit": true,
+      "semester": 5,
+      "slots": [
+        {
+          "end": "09:55",
+          "label": "9:00 - 9:55",
+          "slot": 1,
+          "start": "09:00"
+        },
+        {
+          "end": "10:55",
+          "label": "10:00 - 10:55",
+          "slot": 2,
+          "start": "10:00"
+        },
+        {
+          "end": "11:55",
+          "label": "11:00 - 11:55",
+          "slot": 3,
+          "start": "11:00"
+        },
+        {
+          "end": "14:25",
+          "label": "1:30 - 2:25",
+          "slot": 4,
+          "start": "13:30"
+        },
+        {
+          "end": "15:25",
+          "label": "2:30 - 3:25",
+          "slot": 5,
+          "start": "14:30"
+        },
+        {
+          "end": "16:25",
+          "label": "3:30 - 4:25",
+          "slot": 6,
+          "start": "15:30"
+        }
+      ],
+      "timetable": {
+        "effectiveFrom": "@d-28",
+        "id": "@timetable:sem5",
+        "name": "Semester 5 — Fixture Grid",
+        "semester": 5,
+        "status": "published"
+      },
+      "weekStart": "@d+0"
+    }
+  },
+  "admin/timetable/versions": {
+    "status": 200,
+    "body": [
+      {
+        "createdAt": "@ts",
+        "effectiveFrom": "@d-28",
+        "entryCount": 2,
+        "id": "@timetable:sem5",
+        "name": "Semester 5 — Fixture Grid",
+        "publishedAt": "@ts",
+        "semester": 5,
+        "status": "published",
+        "uploadedBy": "System Admin",
+        "warnings": []
+      },
+      {
+        "createdAt": "@ts",
+        "effectiveFrom": "@d-28",
+        "entryCount": 11,
+        "id": "@timetable:sem3",
+        "name": "Semester 3 — Fixture Grid",
+        "publishedAt": "@ts",
+        "semester": 3,
+        "status": "published",
+        "uploadedBy": "System Admin",
+        "warnings": []
+      }
+    ]
+  },
+  "admin/schedule/changes": {
+    "status": 200,
+    "body": [
+      {
+        "createdAt": "@ts",
+        "createdBy": "Mr Vikram Iyer",
+        "date": "@d+4",
+        "faculty": "Mr Vikram Iyer",
+        "fromSlot": 6,
+        "fromSwap": false,
+        "id": "@id:19",
+        "kind": "extra",
+        "reason": "Revision before the mid-term",
+        "section": "B",
+        "slot": 6,
+        "subject": {
+          "code": "OS",
+          "name": "Operating Systems"
+        },
+        "title": "",
+        "toDate": null,
+        "toSlot": null
+      },
+      {
+        "createdAt": "@ts",
+        "createdBy": "System Admin",
+        "date": "@d+1",
+        "faculty": "Dr Ananya Rao",
+        "fromSlot": 1,
+        "fromSwap": false,
+        "id": "@id:10",
+        "kind": "move",
+        "reason": "Clashed with a guest lecture",
+        "section": "A",
+        "slot": null,
+        "subject": {
+          "code": "DBMS",
+          "name": "Database Management Systems"
+        },
+        "title": "",
+        "toDate": "@d+3",
+        "toSlot": 5
+      },
+      {
+        "createdAt": "@ts",
+        "createdBy": "System Admin",
+        "date": "@d+0",
+        "faculty": "Dr Ananya Rao",
+        "fromSlot": null,
+        "fromSwap": false,
+        "id": "@id:6",
+        "kind": "cancel",
+        "reason": "Lecturer on duty leave",
+        "section": "A",
+        "slot": null,
+        "subject": {
+          "code": "DSA",
+          "name": "Data Structures and Algorithms"
+        },
+        "title": "",
+        "toDate": null,
+        "toSlot": null
+      }
+    ]
+  },
+  "admin/schedule/free-slots": {
+    "status": 200,
+    "body": {
+      "date": "@d+0",
+      "slots": [
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "9:00 - 9:55",
+          "section": {
+            "id": "@section:all/sem5",
+            "name": ""
+          },
+          "slot": 1
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "10:00 - 10:55",
+          "section": {
+            "id": "@section:all/sem5",
+            "name": ""
+          },
+          "slot": 2
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "11:00 - 11:55",
+          "section": {
+            "id": "@section:all/sem5",
+            "name": ""
+          },
+          "slot": 3
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "2:30 - 3:25",
+          "section": {
+            "id": "@section:all/sem5",
+            "name": ""
+          },
+          "slot": 5
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "3:30 - 4:25",
+          "section": {
+            "id": "@section:all/sem5",
+            "name": ""
+          },
+          "slot": 6
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "9:00 - 9:55",
+          "section": {
+            "id": "@section:A/sem3",
+            "name": "A"
+          },
+          "slot": 1
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "11:00 - 11:55",
+          "section": {
+            "id": "@section:A/sem3",
+            "name": "A"
+          },
+          "slot": 3
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "1:30 - 2:25",
+          "section": {
+            "id": "@section:A/sem3",
+            "name": "A"
+          },
+          "slot": 4
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "2:30 - 3:25",
+          "section": {
+            "id": "@section:A/sem3",
+            "name": "A"
+          },
+          "slot": 5
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "3:30 - 4:25",
+          "section": {
+            "id": "@section:A/sem3",
+            "name": "A"
+          },
+          "slot": 6
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "10:00 - 10:55",
+          "section": {
+            "id": "@section:B/sem3",
+            "name": "B"
+          },
+          "slot": 2
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "11:00 - 11:55",
+          "section": {
+            "id": "@section:B/sem3",
+            "name": "B"
+          },
+          "slot": 3
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "1:30 - 2:25",
+          "section": {
+            "id": "@section:B/sem3",
+            "name": "B"
+          },
+          "slot": 4
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "2:30 - 3:25",
+          "section": {
+            "id": "@section:B/sem3",
+            "name": "B"
+          },
+          "slot": 5
+        },
+        {
+          "date": "@d+0",
+          "facultyFree": true,
+          "label": "3:30 - 4:25",
+          "section": {
+            "id": "@section:B/sem3",
+            "name": "B"
+          },
+          "slot": 6
+        }
+      ]
+    }
+  },
+  "admin/swaps": {
+    "status": 200,
+    "body": [
+      {
+        "acceptedAt": null,
+        "canAccept": false,
+        "canApprove": false,
+        "canDecide": true,
+        "canDecline": false,
+        "canReject": true,
+        "canWithdraw": false,
+        "counterparty": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        },
+        "createdAt": "@ts",
+        "decidedAt": null,
+        "decidedBy": null,
+        "decisionNote": "",
+        "from": {
+          "date": "@d+7",
+          "day": "Monday",
+          "section": "A",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "subject": {
+            "code": "DSA",
+            "name": "Data Structures and Algorithms"
+          },
+          "title": ""
+        },
+        "id": "@id:22",
+        "reason": "Clinic appointment",
+        "requestedBy": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "status": "pending",
+        "to": {
+          "date": "@d+7",
+          "day": "Monday",
+          "section": "B",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "subject": {
+            "code": "OS",
+            "name": "Operating Systems"
+          },
+          "title": ""
+        }
+      }
+    ]
+  },
+  "admin/notes": {
+    "status": 200,
+    "body": [
+      {
+        "attachments": [
+          {
+            "contentType": "application/pdf",
+            "filename": "os-scheduling.pdf",
+            "id": "@id:23",
+            "size": 29
+          }
+        ],
+        "description": "Round-robin and priority scheduling.",
+        "id": "@id:24",
+        "postedOn": "@ts",
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3,
+        "subject": {
+          "code": "OS",
+          "id": "@subject:OS/B",
+          "name": "Operating Systems"
+        },
+        "title": "OS — scheduling notes",
+        "uploadedBy": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        }
+      },
+      {
+        "attachments": [
+          {
+            "contentType": "application/pdf",
+            "filename": "dsa-week-1.pdf",
+            "id": "@id:25",
+            "size": 30
+          }
+        ],
+        "description": "Arrays and linked lists.",
+        "id": "@id:26",
+        "postedOn": "@ts",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3,
+        "subject": {
+          "code": "DSA",
+          "id": "@subject:DSA/A",
+          "name": "Data Structures and Algorithms"
+        },
+        "title": "DSA — week 1 handout",
+        "uploadedBy": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        }
+      }
+    ]
+  },
+  "admin/exams": {
+    "status": 200,
+    "body": [
+      {
+        "attachments": [
+          {
+            "contentType": "application/pdf",
+            "filename": "midterm-timetable.pdf",
+            "id": "@id:27",
+            "size": 31
+          }
+        ],
+        "endsOn": "@d+11",
+        "examType": "mid-term",
+        "id": "@id:28",
+        "instructions": "Bring your ID card. No calculators.",
+        "papers": [
+          {
+            "dateKey": "@d+7",
+            "endTime": "12:00",
+            "id": "@id:29",
+            "label": "",
+            "room": "H1",
+            "startTime": "10:00",
+            "subject": {
+              "code": "DSA",
+              "id": "@subject:DSA/A",
+              "name": "Data Structures and Algorithms"
+            }
+          },
+          {
+            "dateKey": "@d+9",
+            "endTime": "12:00",
+            "id": "@id:30",
+            "label": "",
+            "room": "H1",
+            "startTime": "10:00",
+            "subject": {
+              "code": "DBMS",
+              "id": "@subject:DBMS/A",
+              "name": "Database Management Systems"
+            }
+          },
+          {
+            "dateKey": "@d+11",
+            "endTime": "16:00",
+            "id": "@id:31",
+            "label": "Open Elective",
+            "room": "H2",
+            "startTime": "14:00",
+            "subject": null
+          }
+        ],
+        "publishedBy": {
+          "name": "System Admin"
+        },
+        "publishedOn": "@ts",
+        "section": null,
+        "semester": 3,
+        "startsOn": "@d+7",
+        "title": "Semester 3 mid-term"
+      }
+    ]
+  },
+  "admin/notifications": {
+    "status": 200,
+    "body": {
+      "items": [
+        {
+          "createdAt": "@ts",
+          "id": "@id:32",
+          "link": "/swaps",
+          "message": "Dr Ananya Rao → Mr Vikram Iyer.",
+          "read": false,
+          "requiresAction": true,
+          "title": "Swap needs approval",
+          "type": "swap:requested"
+        }
+      ],
+      "unread": 1
+    }
+  },
+  "faculty/me": {
+    "status": 200,
+    "body": {
+      "user": {
+        "department": "Computer Science",
+        "email": "ananya.rao@sitare.org",
+        "employeeId": "FAC-001",
+        "id": "@user:ananya.rao@sitare.org",
+        "name": "Dr Ananya Rao",
+        "role": "faculty",
+        "section": null
+      }
+    }
+  },
+  "faculty/subjects": {
+    "status": 200,
+    "body": [
+      {
+        "coTeaching": null,
+        "code": "DBMS",
+        "conducted": 0,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 3,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "id": "@subject:DBMS/A",
+        "minAttendance": 75,
+        "name": "Database Management Systems",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3,
+        "standingIn": null
+      },
+      {
+        "coTeaching": null,
+        "code": "DSA",
+        "conducted": 3,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 3,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "id": "@subject:DSA/A",
+        "minAttendance": 75,
+        "name": "Data Structures and Algorithms",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3,
+        "standingIn": null
+      },
+      {
+        "coTeaching": null,
+        "code": "PROF",
+        "conducted": 0,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 5,
+        "faculty": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "id": "@subject:PROF/all",
+        "minAttendance": 75,
+        "name": "Professional Ethics",
+        "plannedClasses": 30,
+        "section": null,
+        "semester": 3,
+        "standingIn": null
+      }
+    ]
+  },
+  "faculty/subject/:dsa": {
+    "status": 200,
+    "body": {
+      "conducted": 3,
+      "students": [
+        {
+          "absent": 0,
+          "batch": "2024",
+          "email": "su-30001@sitare.org",
+          "name": "Aarav Sharma",
+          "percentage": 100,
+          "present": 3,
+          "rollNumber": "2024CS30001",
+          "studentId": "@user:su-30001@sitare.org"
+        },
+        {
+          "absent": 1,
+          "batch": "2024",
+          "email": "su-30002@sitare.org",
+          "name": "Diya Patel",
+          "percentage": 66.67,
+          "present": 2,
+          "rollNumber": "2024CS30002",
+          "studentId": "@user:su-30002@sitare.org"
+        },
+        {
+          "absent": 2,
+          "batch": "2024",
+          "email": "su-30003@sitare.org",
+          "name": "Kabir Menon",
+          "percentage": 33.33,
+          "present": 1,
+          "rollNumber": "2024CS30003",
+          "studentId": "@user:su-30003@sitare.org"
+        }
+      ],
+      "subject": {
+        "code": "DSA",
+        "id": "@subject:DSA/A",
+        "minAttendance": 75,
+        "name": "Data Structures and Algorithms",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      }
+    }
+  },
+  "faculty/occurrences/:dsa": {
+    "status": 200,
+    "body": {
+      "conducted": 3,
+      "occurrences": [
+        {
+          "date": "@d+16",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+14",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+14",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+9",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+7",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+7",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": false,
+          "taken": false
+        },
+        {
+          "date": "@d+2",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d+0",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-5",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "presentCount": 3,
+          "reason": "",
+          "sessionId": "@id:2",
+          "sessionStatus": "completed",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": true,
+          "topic": "Queues",
+          "totalMarked": 3
+        },
+        {
+          "date": "@d-7",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-7",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "presentCount": 0,
+          "reason": "",
+          "sessionId": "@id:3",
+          "sessionStatus": "cancelled",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": true,
+          "topic": "Stacks",
+          "totalMarked": 0
+        },
+        {
+          "date": "@d-12",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "presentCount": 2,
+          "reason": "",
+          "sessionId": "@id:4",
+          "sessionStatus": "completed",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": true,
+          "topic": "Linked lists",
+          "totalMarked": 2
+        },
+        {
+          "date": "@d-14",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-14",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "presentCount": 1,
+          "reason": "",
+          "sessionId": "@id:5",
+          "sessionStatus": "completed",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": true,
+          "topic": "Arrays",
+          "totalMarked": 2
+        },
+        {
+          "date": "@d-19",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-21",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-21",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-26",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-28",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 2,
+          "slotLabel": "10:00 - 10:55",
+          "takeable": true,
+          "taken": false
+        },
+        {
+          "date": "@d-28",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        }
+      ],
+      "pending": 10,
+      "subject": {
+        "code": "DSA",
+        "id": "@subject:DSA/A",
+        "name": "Data Structures and Algorithms",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      "today": "@d+4"
+    }
+  },
+  "faculty/sessions/:dsa": {
+    "status": 200,
+    "body": {
+      "conducted": 3,
+      "enrolledCount": 3,
+      "plannedClasses": 30,
+      "sessions": [
+        {
+          "date": "@d-5",
+          "id": "@id:2",
+          "presentCount": 3,
+          "slot": 1,
+          "status": "completed",
+          "topic": "Queues",
+          "totalMarked": 3
+        },
+        {
+          "date": "@d-7",
+          "id": "@id:3",
+          "presentCount": 0,
+          "slot": 1,
+          "status": "cancelled",
+          "topic": "Stacks",
+          "totalMarked": 0
+        },
+        {
+          "date": "@d-12",
+          "id": "@id:4",
+          "presentCount": 2,
+          "slot": 1,
+          "status": "completed",
+          "topic": "Linked lists",
+          "totalMarked": 2
+        },
+        {
+          "date": "@d-14",
+          "id": "@id:5",
+          "presentCount": 1,
+          "slot": 1,
+          "status": "completed",
+          "topic": "Arrays",
+          "totalMarked": 2
+        }
+      ]
+    }
+  },
+  "faculty/timetable/week": {
+    "status": 200,
+    "body": {
+      "days": [
+        {
+          "date": "@d+0",
+          "dayOfWeek": 1,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": "@id:6",
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:7",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:7-@d+0-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "cancelled",
+              "reason": "Lecturer on duty leave",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:8",
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:8-@d+0-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "OS",
+                "id": "@subject:OS/B",
+                "minAttendance": 75,
+                "name": "Operating Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:9",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:9-@d+0-2",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 2,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+1",
+          "dayOfWeek": 2,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": "@id:10",
+              "createdBy": null,
+              "date": "@d+1",
+              "entryId": "@id:11",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:11-@d+1-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": {
+                "date": "@d+3",
+                "slot": 5
+              },
+              "origin": "moved-out",
+              "reason": "Clashed with a guest lecture",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "DBMS",
+                "id": "@subject:DBMS/A",
+                "minAttendance": 75,
+                "name": "Database Management Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+1",
+              "entryId": "@id:12",
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:12-@d+1-2",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 2,
+              "subject": {
+                "code": "OS",
+                "id": "@subject:OS/B",
+                "minAttendance": 75,
+                "name": "Operating Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+2",
+          "dayOfWeek": 3,
+          "occurrences": [
+            {
+              "attendanceBy": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+2",
+              "entryId": "@id:13",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:13-@d+2-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+2",
+              "entryId": "@id:14",
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:14-@d+2-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "CN",
+                "id": "@subject:CN/B",
+                "minAttendance": 75,
+                "name": "Computer Networks"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+3",
+          "dayOfWeek": 4,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+3",
+              "entryId": "@id:15",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:15-@d+3-2",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 2,
+              "subject": {
+                "code": "DBMS",
+                "id": "@subject:DBMS/A",
+                "minAttendance": 75,
+                "name": "Database Management Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+3",
+              "entryId": "@id:16",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:16-@d+3-3",
+              "kind": "office-hours",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 3,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": "@id:10",
+              "createdBy": "@user:admin@sitare.org",
+              "date": "@d+3",
+              "entryId": "@id:11",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:11-@d+3-5",
+              "kind": "lecture",
+              "movedFrom": {
+                "date": "@d+1",
+                "slot": 1
+              },
+              "movedTo": null,
+              "origin": "moved-in",
+              "reason": "Clashed with a guest lecture",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 5,
+              "subject": {
+                "code": "DBMS",
+                "id": "@subject:DBMS/A",
+                "minAttendance": 75,
+                "name": "Database Management Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+4",
+          "dayOfWeek": 5,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+4",
+              "entryId": "@id:17",
+              "faculty": null,
+              "id": "@id:17-@d+4-1",
+              "kind": "event",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": null,
+              "swapRequest": null,
+              "title": "Session with Dean"
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+4",
+              "entryId": "@id:18",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:18-@d+4-3",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": null,
+              "semester": 3,
+              "slot": 3,
+              "subject": {
+                "code": "PROF",
+                "id": "@subject:PROF/all",
+                "minAttendance": 75,
+                "name": "Professional Ethics"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": "@id:19",
+              "createdBy": "@user:vikram.iyer@sitare.org",
+              "date": "@d+4",
+              "entryId": null,
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:19-@d+4-6",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "extra",
+              "reason": "Revision before the mid-term",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 6,
+              "subject": {
+                "code": "OS",
+                "id": "@subject:OS/B",
+                "minAttendance": 75,
+                "name": "Operating Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+5",
+          "dayOfWeek": 6,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+6",
+          "dayOfWeek": 7,
+          "occurrences": [],
+          "teaching": false
+        }
+      ],
+      "lunch": {
+        "afterSlot": 3,
+        "end": "13:30",
+        "label": "LUNCH",
+        "start": "12:30"
+      },
+      "scopedToSection": null,
+      "sectionSplit": true,
+      "semester": 3,
+      "slots": [
+        {
+          "end": "09:55",
+          "label": "9:00 - 9:55",
+          "slot": 1,
+          "start": "09:00"
+        },
+        {
+          "end": "10:55",
+          "label": "10:00 - 10:55",
+          "slot": 2,
+          "start": "10:00"
+        },
+        {
+          "end": "11:55",
+          "label": "11:00 - 11:55",
+          "slot": 3,
+          "start": "11:00"
+        },
+        {
+          "end": "14:25",
+          "label": "1:30 - 2:25",
+          "slot": 4,
+          "start": "13:30"
+        },
+        {
+          "end": "15:25",
+          "label": "2:30 - 3:25",
+          "slot": 5,
+          "start": "14:30"
+        },
+        {
+          "end": "16:25",
+          "label": "3:30 - 4:25",
+          "slot": 6,
+          "start": "15:30"
+        }
+      ],
+      "timetable": {
+        "effectiveFrom": "@d-28",
+        "id": "@timetable:sem3",
+        "name": "Semester 3 — Fixture Grid",
+        "semester": 3,
+        "status": "published"
+      },
+      "weekStart": "@d+0"
+    }
+  },
+  "faculty/swaps": {
+    "status": 200,
+    "body": [
+      {
+        "acceptedAt": null,
+        "canAccept": false,
+        "canApprove": false,
+        "canDecide": false,
+        "canDecline": false,
+        "canReject": false,
+        "canWithdraw": true,
+        "counterparty": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        },
+        "createdAt": "@ts",
+        "decidedAt": null,
+        "decidedBy": null,
+        "decisionNote": "",
+        "from": {
+          "date": "@d+7",
+          "day": "Monday",
+          "section": "A",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "subject": {
+            "code": "DSA",
+            "name": "Data Structures and Algorithms"
+          },
+          "title": ""
+        },
+        "id": "@id:22",
+        "reason": "Clinic appointment",
+        "requestedBy": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        },
+        "status": "pending",
+        "to": {
+          "date": "@d+7",
+          "day": "Monday",
+          "section": "B",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "subject": {
+            "code": "OS",
+            "name": "Operating Systems"
+          },
+          "title": ""
+        }
+      }
+    ]
+  },
+  "faculty/notes": {
+    "status": 200,
+    "body": [
+      {
+        "attachments": [
+          {
+            "contentType": "application/pdf",
+            "filename": "os-scheduling.pdf",
+            "id": "@id:23",
+            "size": 29
+          }
+        ],
+        "description": "Round-robin and priority scheduling.",
+        "id": "@id:24",
+        "postedOn": "@ts",
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3,
+        "subject": {
+          "code": "OS",
+          "id": "@subject:OS/B",
+          "name": "Operating Systems"
+        },
+        "title": "OS — scheduling notes",
+        "uploadedBy": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        }
+      },
+      {
+        "attachments": [
+          {
+            "contentType": "application/pdf",
+            "filename": "dsa-week-1.pdf",
+            "id": "@id:25",
+            "size": 30
+          }
+        ],
+        "description": "Arrays and linked lists.",
+        "id": "@id:26",
+        "postedOn": "@ts",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3,
+        "subject": {
+          "code": "DSA",
+          "id": "@subject:DSA/A",
+          "name": "Data Structures and Algorithms"
+        },
+        "title": "DSA — week 1 handout",
+        "uploadedBy": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        }
+      }
+    ]
+  },
+  "faculty/exams": {
+    "status": 200,
+    "body": [
+      {
+        "attachments": [
+          {
+            "contentType": "application/pdf",
+            "filename": "midterm-timetable.pdf",
+            "id": "@id:27",
+            "size": 31
+          }
+        ],
+        "endsOn": "@d+11",
+        "examType": "mid-term",
+        "id": "@id:28",
+        "instructions": "Bring your ID card. No calculators.",
+        "papers": [
+          {
+            "dateKey": "@d+7",
+            "endTime": "12:00",
+            "id": "@id:29",
+            "label": "",
+            "room": "H1",
+            "startTime": "10:00",
+            "subject": {
+              "code": "DSA",
+              "id": "@subject:DSA/A",
+              "name": "Data Structures and Algorithms"
+            }
+          },
+          {
+            "dateKey": "@d+9",
+            "endTime": "12:00",
+            "id": "@id:30",
+            "label": "",
+            "room": "H1",
+            "startTime": "10:00",
+            "subject": {
+              "code": "DBMS",
+              "id": "@subject:DBMS/A",
+              "name": "Database Management Systems"
+            }
+          },
+          {
+            "dateKey": "@d+11",
+            "endTime": "16:00",
+            "id": "@id:31",
+            "label": "Open Elective",
+            "room": "H2",
+            "startTime": "14:00",
+            "subject": null
+          }
+        ],
+        "publishedBy": {
+          "name": "System Admin"
+        },
+        "publishedOn": "@ts",
+        "section": null,
+        "semester": 3,
+        "startsOn": "@d+7",
+        "title": "Semester 3 mid-term"
+      }
+    ]
+  },
+  "faculty2/subjects": {
+    "status": 200,
+    "body": [
+      {
+        "coTeaching": null,
+        "code": "CN",
+        "conducted": 0,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 2,
+        "faculty": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        },
+        "id": "@subject:CN/B",
+        "minAttendance": 75,
+        "name": "Computer Networks",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3,
+        "standingIn": null
+      },
+      {
+        "coTeaching": null,
+        "code": "OS",
+        "conducted": 0,
+        "credits": 3,
+        "department": "Computer Science",
+        "enrolledCount": 2,
+        "faculty": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        },
+        "id": "@subject:OS/B",
+        "minAttendance": 75,
+        "name": "Operating Systems",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3,
+        "standingIn": null
+      }
+    ]
+  },
+  "faculty2/occurrences/:dsa": {
+    "status": 200,
+    "body": {
+      "conducted": 3,
+      "occurrences": [
+        {
+          "date": "@d+2",
+          "movedFrom": null,
+          "origin": "scheduled",
+          "reason": "",
+          "slot": 1,
+          "slotLabel": "9:00 - 9:55",
+          "takeable": true,
+          "taken": false
+        }
+      ],
+      "pending": 1,
+      "subject": {
+        "code": "DSA",
+        "id": "@subject:DSA/A",
+        "name": "Data Structures and Algorithms",
+        "plannedClasses": 30,
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      },
+      "today": "@d+4"
+    }
+  },
+  "faculty2/notes": {
+    "status": 200,
+    "body": [
+      {
+        "attachments": [
+          {
+            "contentType": "application/pdf",
+            "filename": "os-scheduling.pdf",
+            "id": "@id:23",
+            "size": 29
+          }
+        ],
+        "description": "Round-robin and priority scheduling.",
+        "id": "@id:24",
+        "postedOn": "@ts",
+        "section": {
+          "id": "@section:B/sem3",
+          "name": "B"
+        },
+        "semester": 3,
+        "subject": {
+          "code": "OS",
+          "id": "@subject:OS/B",
+          "name": "Operating Systems"
+        },
+        "title": "OS — scheduling notes",
+        "uploadedBy": {
+          "id": "@user:vikram.iyer@sitare.org",
+          "name": "Mr Vikram Iyer"
+        }
+      }
+    ]
+  },
+  "student/me": {
+    "status": 200,
+    "body": {
+      "user": {
+        "batch": "2024",
+        "department": "Computer Science",
+        "email": "su-30001@sitare.org",
+        "id": "@user:su-30001@sitare.org",
+        "name": "Aarav Sharma",
+        "role": "student",
+        "rollNumber": "2024CS30001",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3
+      }
+    }
+  },
+  "student/attendance": {
+    "status": 200,
+    "body": {
+      "overall": {
+        "absent": 0,
+        "conducted": 3,
+        "minAttendance": 75,
+        "percentage": 100,
+        "present": 3,
+        "status": "good",
+        "subjectCount": 3,
+        "totalPlanned": 90
+      },
+      "subjects": [
+        {
+          "absent": 0,
+          "code": "DBMS",
+          "conducted": 0,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Database Management Systems",
+          "percentage": null,
+          "plannedClasses": 30,
+          "present": 0,
+          "status": "no-data",
+          "subjectId": "@subject:DBMS/A"
+        },
+        {
+          "absent": 0,
+          "code": "DSA",
+          "conducted": 3,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Data Structures and Algorithms",
+          "percentage": 100,
+          "plannedClasses": 30,
+          "present": 3,
+          "status": "good",
+          "subjectId": "@subject:DSA/A"
+        },
+        {
+          "absent": 0,
+          "code": "PROF",
+          "conducted": 0,
+          "credits": 3,
+          "faculty": {
+            "email": "ananya.rao@sitare.org",
+            "name": "Dr Ananya Rao"
+          },
+          "minAttendance": 75,
+          "name": "Professional Ethics",
+          "percentage": null,
+          "plannedClasses": 30,
+          "present": 0,
+          "status": "no-data",
+          "subjectId": "@subject:PROF/all"
+        }
+      ]
+    }
+  },
+  "student/attendance/:dsa": {
+    "status": 200,
+    "body": {
+      "absent": 0,
+      "conducted": 3,
+      "history": [
+        {
+          "cancelled": false,
+          "date": "@d-5",
+          "remark": "",
+          "sessionId": "@id:2",
+          "slot": 1,
+          "status": "present",
+          "topic": "Queues"
+        },
+        {
+          "cancelled": true,
+          "date": "@d-7",
+          "remark": "",
+          "sessionId": "@id:3",
+          "slot": 1,
+          "status": "cancelled",
+          "topic": "Stacks"
+        },
+        {
+          "cancelled": false,
+          "date": "@d-12",
+          "remark": "",
+          "sessionId": "@id:4",
+          "slot": 1,
+          "status": "present",
+          "topic": "Linked lists"
+        },
+        {
+          "cancelled": false,
+          "date": "@d-14",
+          "remark": "",
+          "sessionId": "@id:5",
+          "slot": 1,
+          "status": "present",
+          "topic": "Arrays"
+        }
+      ],
+      "percentage": 100,
+      "present": 3,
+      "subject": {
+        "code": "DSA",
+        "faculty": {
+          "name": "Dr Ananya Rao"
+        },
+        "id": "@subject:DSA/A",
+        "minAttendance": 75,
+        "name": "Data Structures and Algorithms",
+        "plannedClasses": 30
+      }
+    }
+  },
+  "student/timetable/week": {
+    "status": 200,
+    "body": {
+      "days": [
+        {
+          "date": "@d+0",
+          "dayOfWeek": 1,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": "@id:6",
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:7",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:7-@d+0-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "cancelled",
+              "reason": "Lecturer on duty leave",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:8",
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:8-@d+0-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "OS",
+                "id": "@subject:OS/B",
+                "minAttendance": 75,
+                "name": "Operating Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:9",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:9-@d+0-2",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 2,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+1",
+          "dayOfWeek": 2,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": "@id:10",
+              "createdBy": null,
+              "date": "@d+1",
+              "entryId": "@id:11",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:11-@d+1-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": {
+                "date": "@d+3",
+                "slot": 5
+              },
+              "origin": "moved-out",
+              "reason": "Clashed with a guest lecture",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "DBMS",
+                "id": "@subject:DBMS/A",
+                "minAttendance": 75,
+                "name": "Database Management Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+1",
+              "entryId": "@id:12",
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:12-@d+1-2",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 2,
+              "subject": {
+                "code": "OS",
+                "id": "@subject:OS/B",
+                "minAttendance": 75,
+                "name": "Operating Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+2",
+          "dayOfWeek": 3,
+          "occurrences": [
+            {
+              "attendanceBy": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+2",
+              "entryId": "@id:13",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:13-@d+2-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+2",
+              "entryId": "@id:14",
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:14-@d+2-1",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": {
+                "code": "CN",
+                "id": "@subject:CN/B",
+                "minAttendance": 75,
+                "name": "Computer Networks"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+3",
+          "dayOfWeek": 4,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+3",
+              "entryId": "@id:15",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:15-@d+3-2",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 2,
+              "subject": {
+                "code": "DBMS",
+                "id": "@subject:DBMS/A",
+                "minAttendance": 75,
+                "name": "Database Management Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+3",
+              "entryId": "@id:16",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:16-@d+3-3",
+              "kind": "office-hours",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 3,
+              "subject": {
+                "code": "DSA",
+                "id": "@subject:DSA/A",
+                "minAttendance": 75,
+                "name": "Data Structures and Algorithms"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": "@id:10",
+              "createdBy": "@user:admin@sitare.org",
+              "date": "@d+3",
+              "entryId": "@id:11",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:11-@d+3-5",
+              "kind": "lecture",
+              "movedFrom": {
+                "date": "@d+1",
+                "slot": 1
+              },
+              "movedTo": null,
+              "origin": "moved-in",
+              "reason": "Clashed with a guest lecture",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 5,
+              "subject": {
+                "code": "DBMS",
+                "id": "@subject:DBMS/A",
+                "minAttendance": 75,
+                "name": "Database Management Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+4",
+          "dayOfWeek": 5,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+4",
+              "entryId": "@id:17",
+              "faculty": null,
+              "id": "@id:17-@d+4-1",
+              "kind": "event",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:A/sem3",
+                "name": "A"
+              },
+              "semester": 3,
+              "slot": 1,
+              "subject": null,
+              "swapRequest": null,
+              "title": "Session with Dean"
+            },
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+4",
+              "entryId": "@id:18",
+              "faculty": {
+                "email": "ananya.rao@sitare.org",
+                "id": "@user:ananya.rao@sitare.org",
+                "name": "Dr Ananya Rao"
+              },
+              "id": "@id:18-@d+4-3",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": null,
+              "semester": 3,
+              "slot": 3,
+              "subject": {
+                "code": "PROF",
+                "id": "@subject:PROF/all",
+                "minAttendance": 75,
+                "name": "Professional Ethics"
+              },
+              "swapRequest": null,
+              "title": ""
+            },
+            {
+              "attendanceBy": null,
+              "changeId": "@id:19",
+              "createdBy": "@user:vikram.iyer@sitare.org",
+              "date": "@d+4",
+              "entryId": null,
+              "faculty": {
+                "email": "vikram.iyer@sitare.org",
+                "id": "@user:vikram.iyer@sitare.org",
+                "name": "Mr Vikram Iyer"
+              },
+              "id": "@id:19-@d+4-6",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "extra",
+              "reason": "Revision before the mid-term",
+              "room": "",
+              "section": {
+                "id": "@section:B/sem3",
+                "name": "B"
+              },
+              "semester": 3,
+              "slot": 6,
+              "subject": {
+                "code": "OS",
+                "id": "@subject:OS/B",
+                "minAttendance": 75,
+                "name": "Operating Systems"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+5",
+          "dayOfWeek": 6,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+6",
+          "dayOfWeek": 7,
+          "occurrences": [],
+          "teaching": false
+        }
+      ],
+      "lunch": {
+        "afterSlot": 3,
+        "end": "13:30",
+        "label": "LUNCH",
+        "start": "12:30"
+      },
+      "scopedToSection": null,
+      "sectionSplit": true,
+      "semester": 3,
+      "slots": [
+        {
+          "end": "09:55",
+          "label": "9:00 - 9:55",
+          "slot": 1,
+          "start": "09:00"
+        },
+        {
+          "end": "10:55",
+          "label": "10:00 - 10:55",
+          "slot": 2,
+          "start": "10:00"
+        },
+        {
+          "end": "11:55",
+          "label": "11:00 - 11:55",
+          "slot": 3,
+          "start": "11:00"
+        },
+        {
+          "end": "14:25",
+          "label": "1:30 - 2:25",
+          "slot": 4,
+          "start": "13:30"
+        },
+        {
+          "end": "15:25",
+          "label": "2:30 - 3:25",
+          "slot": 5,
+          "start": "14:30"
+        },
+        {
+          "end": "16:25",
+          "label": "3:30 - 4:25",
+          "slot": 6,
+          "start": "15:30"
+        }
+      ],
+      "timetable": {
+        "effectiveFrom": "@d-28",
+        "id": "@timetable:sem3",
+        "name": "Semester 3 — Fixture Grid",
+        "semester": 3,
+        "status": "published"
+      },
+      "weekStart": "@d+0"
+    }
+  },
+  "student/notes": {
+    "status": 200,
+    "body": [
+      {
+        "attachments": [
+          {
+            "contentType": "application/pdf",
+            "filename": "dsa-week-1.pdf",
+            "id": "@id:25",
+            "size": 30
+          }
+        ],
+        "description": "Arrays and linked lists.",
+        "id": "@id:26",
+        "postedOn": "@ts",
+        "section": {
+          "id": "@section:A/sem3",
+          "name": "A"
+        },
+        "semester": 3,
+        "subject": {
+          "code": "DSA",
+          "id": "@subject:DSA/A",
+          "name": "Data Structures and Algorithms"
+        },
+        "title": "DSA — week 1 handout",
+        "uploadedBy": {
+          "id": "@user:ananya.rao@sitare.org",
+          "name": "Dr Ananya Rao"
+        }
+      }
+    ]
+  },
+  "student/exams": {
+    "status": 200,
+    "body": [
+      {
+        "attachments": [
+          {
+            "contentType": "application/pdf",
+            "filename": "midterm-timetable.pdf",
+            "id": "@id:27",
+            "size": 31
+          }
+        ],
+        "endsOn": "@d+11",
+        "examType": "mid-term",
+        "id": "@id:28",
+        "instructions": "Bring your ID card. No calculators.",
+        "papers": [
+          {
+            "dateKey": "@d+7",
+            "endTime": "12:00",
+            "id": "@id:29",
+            "label": "",
+            "room": "H1",
+            "startTime": "10:00",
+            "subject": {
+              "code": "DSA",
+              "id": "@subject:DSA/A",
+              "name": "Data Structures and Algorithms"
+            }
+          },
+          {
+            "dateKey": "@d+9",
+            "endTime": "12:00",
+            "id": "@id:30",
+            "label": "",
+            "room": "H1",
+            "startTime": "10:00",
+            "subject": {
+              "code": "DBMS",
+              "id": "@subject:DBMS/A",
+              "name": "Database Management Systems"
+            }
+          },
+          {
+            "dateKey": "@d+11",
+            "endTime": "16:00",
+            "id": "@id:31",
+            "label": "Open Elective",
+            "room": "H2",
+            "startTime": "14:00",
+            "subject": null
+          }
+        ],
+        "publishedBy": {
+          "name": "System Admin"
+        },
+        "publishedOn": "@ts",
+        "section": null,
+        "semester": 3,
+        "startsOn": "@d+7",
+        "title": "Semester 3 mid-term"
+      }
+    ]
+  },
+  "student/leave": {
+    "status": 200,
+    "body": []
+  },
+  "student5/attendance": {
+    "status": 200,
+    "body": {
+      "overall": {
+        "absent": 0,
+        "conducted": 0,
+        "minAttendance": 75,
+        "percentage": null,
+        "present": 0,
+        "status": "no-data",
+        "subjectCount": 1,
+        "totalPlanned": 30
+      },
+      "subjects": [
+        {
+          "absent": 0,
+          "code": "ML",
+          "conducted": 0,
+          "credits": 3,
+          "faculty": {
+            "email": "meera.nair@sitare.org",
+            "name": "Ms Meera Nair"
+          },
+          "minAttendance": 75,
+          "name": "Machine Learning",
+          "percentage": null,
+          "plannedClasses": 30,
+          "present": 0,
+          "status": "no-data",
+          "subjectId": "@subject:ML/all"
+        }
+      ]
+    }
+  },
+  "student5/timetable/week": {
+    "status": 200,
+    "body": {
+      "days": [
+        {
+          "date": "@d+0",
+          "dayOfWeek": 1,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+0",
+              "entryId": "@id:20",
+              "faculty": {
+                "email": "meera.nair@sitare.org",
+                "id": "@user:meera.nair@sitare.org",
+                "name": "Ms Meera Nair"
+              },
+              "id": "@id:20-@d+0-4",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:all/sem5",
+                "name": ""
+              },
+              "semester": 5,
+              "slot": 4,
+              "subject": {
+                "code": "ML",
+                "id": "@subject:ML/all",
+                "minAttendance": 75,
+                "name": "Machine Learning"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+1",
+          "dayOfWeek": 2,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+2",
+          "dayOfWeek": 3,
+          "occurrences": [
+            {
+              "attendanceBy": null,
+              "changeId": null,
+              "createdBy": null,
+              "date": "@d+2",
+              "entryId": "@id:21",
+              "faculty": {
+                "email": "meera.nair@sitare.org",
+                "id": "@user:meera.nair@sitare.org",
+                "name": "Ms Meera Nair"
+              },
+              "id": "@id:21-@d+2-4",
+              "kind": "lecture",
+              "movedFrom": null,
+              "movedTo": null,
+              "origin": "scheduled",
+              "reason": "",
+              "room": "",
+              "section": {
+                "id": "@section:all/sem5",
+                "name": ""
+              },
+              "semester": 5,
+              "slot": 4,
+              "subject": {
+                "code": "ML",
+                "id": "@subject:ML/all",
+                "minAttendance": 75,
+                "name": "Machine Learning"
+              },
+              "swapRequest": null,
+              "title": ""
+            }
+          ],
+          "teaching": true
+        },
+        {
+          "date": "@d+3",
+          "dayOfWeek": 4,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+4",
+          "dayOfWeek": 5,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+5",
+          "dayOfWeek": 6,
+          "occurrences": [],
+          "teaching": true
+        },
+        {
+          "date": "@d+6",
+          "dayOfWeek": 7,
+          "occurrences": [],
+          "teaching": false
+        }
+      ],
+      "lunch": {
+        "afterSlot": 3,
+        "end": "13:30",
+        "label": "LUNCH",
+        "start": "12:30"
+      },
+      "scopedToSection": null,
+      "sectionSplit": true,
+      "semester": 5,
+      "slots": [
+        {
+          "end": "09:55",
+          "label": "9:00 - 9:55",
+          "slot": 1,
+          "start": "09:00"
+        },
+        {
+          "end": "10:55",
+          "label": "10:00 - 10:55",
+          "slot": 2,
+          "start": "10:00"
+        },
+        {
+          "end": "11:55",
+          "label": "11:00 - 11:55",
+          "slot": 3,
+          "start": "11:00"
+        },
+        {
+          "end": "14:25",
+          "label": "1:30 - 2:25",
+          "slot": 4,
+          "start": "13:30"
+        },
+        {
+          "end": "15:25",
+          "label": "2:30 - 3:25",
+          "slot": 5,
+          "start": "14:30"
+        },
+        {
+          "end": "16:25",
+          "label": "3:30 - 4:25",
+          "slot": 6,
+          "start": "15:30"
+        }
+      ],
+      "timetable": {
+        "effectiveFrom": "@d-28",
+        "id": "@timetable:sem5",
+        "name": "Semester 5 — Fixture Grid",
+        "semester": 5,
+        "status": "published"
+      },
+      "weekStart": "@d+0"
+    }
+  },
+  "student5/subject/:ml": {
+    "status": 200,
+    "body": {
+      "absent": 0,
+      "conducted": 0,
+      "history": [],
+      "percentage": null,
+      "present": 0,
+      "subject": {
+        "code": "ML",
+        "faculty": {
+          "name": "Ms Meera Nair"
+        },
+        "id": "@subject:ML/all",
+        "minAttendance": 75,
+        "name": "Machine Learning",
+        "plannedClasses": 30
+      }
+    }
+  }
+}

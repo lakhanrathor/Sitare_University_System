@@ -9,8 +9,10 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed/seed.js",
+    "seed:demo": "node src/seed/fixture.js",
     "security-check": "node security-check.mjs",
     "google-auth-check": "node google-auth-check.mjs",
+    "api-snapshot": "node api-snapshot.mjs",
     "create-admin": "node create-admin.mjs"
   },
   "dependencies": {
@@ -28,5 +30,8 @@
     "pdfjs-dist": "^6.2.108",
     "socket.io": "^4.8.1",
     "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
   }
 }

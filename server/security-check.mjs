@@ -132,6 +132,20 @@ console.log('\nIDOR / resource-level authorization');
 
   const notes = (await call('/notes', {}, admin.token)).json.data;
 
+  /*
+   * Without this, an empty faculty list made the loop below emit nothing at
+   * all — not a pass, not a fail, not even a skip line — so the section
+   * silently tested zero things and still looked healthy. That is exactly
+   * the section that covers resource-level authorization, so its silence
+   * was the most misleading output in the whole script. Run
+   * `npm run seed:demo` for a fixture that actually exercises it.
+   */
+  if (!facultyLogins.length) {
+    console.log('  skip  (no faculty demo logins available — run `npm run seed:demo`)');
+  } else if (!notes.some((n) => n.attachments?.length)) {
+    console.log('  skip  (no note with an attachment to attempt a cross-cohort download)');
+  }
+
   for (const fl of facultyLogins) {
     const myNotes = (await call('/notes', {}, fl.token)).json.data;
     const myNoteIds = new Set(myNotes.map((n) => n.id));
