@@ -2,6 +2,7 @@ import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import Enrollment from '../models/Enrollment.js';
 import { emitToUsers } from '../sockets/index.js';
+import { idOf } from '../utils/ids.js';
 
 /**
  * Persist notifications and push them over the socket in one step, so a user
@@ -57,9 +58,9 @@ export async function withdrawNotifications(filter) {
   // Drop it from anyone's open bell, rather than waiting for a reload.
   const byUser = new Map();
   for (const d of doomed) {
-    const key = String(d.user);
+    const key = idOf(d.user);
     if (!byUser.has(key)) byUser.set(key, []);
-    byUser.get(key).push(String(d._id));
+    byUser.get(key).push(idOf(d));
   }
   for (const [user, ids] of byUser) {
     emitToUsers([user], 'notification:removed', { ids });
@@ -73,13 +74,13 @@ export async function facultyAndAdminIds({ exclude = [] } = {}) {
   const users = await User.find({ role: { $in: ['faculty', 'admin'] }, isActive: true })
     .select('_id')
     .lean();
-  const skip = new Set(exclude.map(String));
-  return users.map((u) => String(u._id)).filter((id) => !skip.has(id));
+  const skip = new Set(exclude.map(idOf));
+  return users.map(idOf).filter((id) => !skip.has(id));
 }
 
 export async function adminIds() {
   const admins = await User.find({ role: 'admin', isActive: true }).select('_id').lean();
-  return admins.map((a) => String(a._id));
+  return admins.map(idOf);
 }
 
 /**
@@ -96,7 +97,7 @@ export async function studentAudience({ subjectId, sectionId }) {
     const rows = await Enrollment.find({ subject: subjectId, isActive: true })
       .select('student')
       .lean();
-    if (rows.length) return rows.map((r) => String(r.student));
+    if (rows.length) return rows.map((r) => idOf(r.student));
   }
   if (!sectionId) return [];
   const rows = await User.find({
@@ -106,5 +107,5 @@ export async function studentAudience({ subjectId, sectionId }) {
   })
     .select('_id')
     .lean();
-  return rows.map((r) => String(r._id));
+  return rows.map(idOf);
 }

@@ -54,34 +54,10 @@ userSchema.pre('save', async function hashPassword(next) {
   next();
 });
 
-userSchema.methods.comparePassword = function comparePassword(plain) {
-  return bcrypt.compare(plain, this.password);
-};
-
-userSchema.methods.toSafeJSON = function toSafeJSON() {
-  const { _id, name, email, role, rollNumber, employeeId, batch, semester, department, section } =
-    this;
-  return {
-    id: _id,
-    name,
-    email,
-    role,
-    rollNumber,
-    employeeId,
-    batch,
-    semester,
-    department,
-    // Always the same shape, whether `section` was populated or left as an id.
-    section: section
-      ? { id: String(section._id || section), name: section.name ?? null }
-      : null,
-  };
-};
-
-/** The section id, regardless of whether the field has been populated. */
-userSchema.methods.sectionId = function sectionId() {
-  if (!this.section) return null;
-  return String(this.section._id || this.section);
-};
-
+/*
+ * No document methods here on purpose: what a User *means* — its public
+ * shape, its section id, whether a password matches — lives in
+ * utils/user.js as plain functions, so a `.lean()` row and a hydrated
+ * document are equally usable by every caller.
+ */
 export default mongoose.model('User', userSchema);

@@ -4,6 +4,7 @@ import ScheduleChange from '../models/ScheduleChange.js';
 import ClassSession from '../models/ClassSession.js';
 import AttendanceDelegation from '../models/AttendanceDelegation.js';
 import { dayOfWeek, weekDates } from '../utils/date.js';
+import { idOf, sameId } from '../utils/ids.js';
 import { SLOTS, LUNCH, isTeachingDay } from '../config/slots.js';
 
 /** The one live grid for a semester, or null before anything is published. */
@@ -50,7 +51,7 @@ function toOccurrence(entry, dateKey, slot, extras = {}) {
   const sec = entry?.section || extras.section;
   return {
     // Stable per date+slot so React keys and conflict maps behave.
-    id: `${entry?._id || extras.changeId}-${dateKey}-${slot}`,
+    id: `${idOf(entry) || idOf(extras.changeId)}-${dateKey}-${slot}`,
     entryId: entry ? String(entry._id) : null,
     changeId: extras.changeId || null,
     date: dateKey,
@@ -130,7 +131,7 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
 
   // An event names no subject and no cohort, so its year comes from the
   // timetable it was printed on.
-  const semesterOfTimetable = new Map(timetables.map((t) => [String(t._id), t.semester]));
+  const semesterOfTimetable = new Map(timetables.map((t) => [idOf(t), t.semester]));
 
   const [entries, changes] = await Promise.all([
     TimetableEntry.find(entryFilter).populate(populate).lean(),
@@ -172,9 +173,9 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
 
   for (const c of changes) {
     if (c.kind === 'cancel' && dates.includes(c.dateKey)) {
-      departures.set(`${c.dateKey}|${c.entry?._id}`, c);
+      departures.set(`${c.dateKey}|${idOf(c.entry)}`, c);
     } else if (c.kind === 'move') {
-      if (dates.includes(c.dateKey)) departures.set(`${c.dateKey}|${c.entry?._id}`, c);
+      if (dates.includes(c.dateKey)) departures.set(`${c.dateKey}|${idOf(c.entry)}`, c);
       if (dates.includes(c.toDateKey)) arrivals.push(c);
     } else if (c.kind === 'extra' && dates.includes(c.dateKey)) {
       extras.push(c);
@@ -187,7 +188,7 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
     const list = [];
 
     for (const entry of entriesByDay.get(dow) || []) {
-      const change = departures.get(`${dateKey}|${entry._id}`);
+      const change = departures.get(`${dateKey}|${idOf(entry)}`);
       if (change) {
         // Leave a tombstone so the grid can show "moved to Thu 2:30" in place.
         list.push(
@@ -198,14 +199,14 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
             reason: change.reason,
             changeId: String(change._id),
             swapRequest: change.swapRequest,
-            semester: semesterOfTimetable.get(String(entry.timetable)),
+            semester: semesterOfTimetable.get(idOf(entry.timetable)),
           })
         );
         continue;
       }
       list.push(
         toOccurrence(entry, dateKey, entry.slot, {
-          semester: semesterOfTimetable.get(String(entry.timetable)),
+          semester: semesterOfTimetable.get(idOf(entry.timetable)),
         })
       );
     }
@@ -220,7 +221,7 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
           changeId: String(c._id),
           swapRequest: c.swapRequest,
           createdBy: c.createdBy,
-          semester: semesterOfTimetable.get(String(c.entry.timetable)),
+          semester: semesterOfTimetable.get(idOf(c.entry.timetable)),
         })
       );
     }
@@ -257,10 +258,10 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
 
   if (delegations.length) {
     const bySubject = new Map(
-      delegations.map((d) => [`${d.subject}|${d.dateKey}|${d.slot}`, d])
+      delegations.map((d) => [`${idOf(d.subject)}|${d.dateKey}|${d.slot}`, d])
     );
     const byEntry = new Map(
-      delegations.filter((d) => d.entry).map((d) => [`${d.entry}|${d.dateKey}|${d.slot}`, d])
+      delegations.filter((d) => d.entry).map((d) => [`${idOf(d.entry)}|${d.dateKey}|${d.slot}`, d])
     );
 
     for (const dateKey of dates) {
@@ -370,12 +371,12 @@ export async function findConflicts({
       ? atSlot.find((o) => {
           // An undivided year is every cohort of that year, split or not.
           if (!sectionId) return sameYear(o);
-          return o.section ? String(o.section.id) === String(sectionId) : sameYear(o);
+          return o.section ? sameId(o.section.id, sectionId) : sameYear(o);
         }) || null
       : null;
 
   const theirs = facultyId
-    ? atSlot.filter((o) => o !== section && o.faculty && String(o.faculty.id) === String(facultyId))
+    ? atSlot.filter((o) => o !== section && o.faculty && sameId(o.faculty.id, facultyId))
     : [];
 
   return {

@@ -6,6 +6,7 @@ import User from '../models/User.js';
 import Enrollment from '../models/Enrollment.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { idOf, sameId } from '../utils/ids.js';
 import { putFile, openFile, deleteFiles } from '../services/fileStore.js';
 import { notify, withdrawNotifications } from '../services/notificationService.js';
 
@@ -54,7 +55,6 @@ const shape = (n) => ({
  * comparison against one silently never matches — which reads as the student
  * being locked out of their own class's material.
  */
-const idOf = (v) => (v ? String(v._id ?? v) : '');
 
 /**
  * What this caller may see.
@@ -137,13 +137,13 @@ async function cohortFor({ subject, section, semester }) {
     const rows = await Enrollment.find({ subject: subject._id, isActive: true })
       .select('student')
       .lean();
-    if (rows.length) return rows.map((r) => String(r.student));
+    if (rows.length) return rows.map((r) => idOf(r.student));
   }
   const filter = { role: 'student', isActive: true };
   if (section) filter.section = section._id;
   else filter.semester = semester;
   const rows = await User.find(filter).select('_id').lean();
-  return rows.map((r) => String(r._id));
+  return rows.map(idOf);
 }
 
 /** Publish notes to a cohort. */
@@ -171,7 +171,7 @@ export const createNote = asyncHandler(async (req, res) => {
      * could file material under a colleague's subject, where it would look
      * like the colleague had posted it.
      */
-    if (req.user.role === 'faculty' && String(subject.faculty) !== String(req.user._id)) {
+    if (req.user.role === 'faculty' && !sameId(subject.faculty, req.user._id)) {
       throw ApiError.forbidden('You do not teach that subject');
     }
   }
@@ -241,11 +241,11 @@ async function loadVisible(user, noteId) {
   if (user.role === 'student') {
     const sameYear = Number(note.semester) === Number(user.semester);
     // No section means the whole year; otherwise it has to be their own.
-    const forThem = !note.section || idOf(note.section) === idOf(user.section);
+    const forThem = !note.section || sameId(note.section, user.section);
     if (!sameYear || !forThem) throw ApiError.forbidden('Those notes are not for your class');
   }
 
-  if (user.role === 'faculty' && String(note.uploadedBy) !== String(user._id)) {
+  if (user.role === 'faculty' && !sameId(note.uploadedBy, user._id)) {
     const taught = await Subject.find({ faculty: user._id, isActive: true })
       .select('semester section')
       .lean();
@@ -254,7 +254,7 @@ async function loadVisible(user, noteId) {
         s.semester === note.semester &&
         // Teaching the whole undivided year opens every section in it; teaching
         // one section opens that section's notes plus whole-year ones.
-        (!s.section || !note.section || idOf(s.section) === idOf(note.section))
+        (!s.section || !note.section || sameId(s.section, note.section))
     );
     if (!coversCohort) throw ApiError.forbidden('Those notes are not for a class you teach');
   }
@@ -265,7 +265,7 @@ export const downloadNoteFile = asyncHandler(async (req, res) => {
   const note = await loadVisible(req.user, req.params.noteId);
 
   const attachment = (note.attachments || []).find(
-    (a) => String(a._id) === String(req.params.attachmentId)
+    (a) => sameId(a._id, req.params.attachmentId)
   );
   if (!attachment) throw ApiError.notFound('That file is not on these notes');
 
@@ -292,7 +292,7 @@ export const deleteNote = asyncHandler(async (req, res) => {
   const note = await Note.findById(req.params.noteId);
   if (!note) throw ApiError.notFound('Those notes no longer exist');
 
-  const mine = String(note.uploadedBy) === String(req.user._id);
+  const mine = sameId(note.uploadedBy, req.user._id);
   if (req.user.role !== 'admin' && !mine) {
     throw ApiError.forbidden('You can only remove notes you published');
   }

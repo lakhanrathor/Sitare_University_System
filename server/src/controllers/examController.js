@@ -5,6 +5,7 @@ import Subject from '../models/Subject.js';
 import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { idOf, sameId } from '../utils/ids.js';
 import { putFile, openFile, deleteFiles } from '../services/fileStore.js';
 import { notify, withdrawNotifications } from '../services/notificationService.js';
 import { emitToUsers } from '../sockets/index.js';
@@ -69,7 +70,6 @@ const publishSchema = z.object({
  * document rather than an id. A query filter casts it, but a string comparison
  * silently never matches.
  */
-const idOf = (v) => (v ? String(v._id ?? v) : '');
 
 const shape = (e) => {
   const papers = [...(e.papers || [])].sort(
@@ -146,7 +146,7 @@ async function audienceFor({ semester, sectionId }) {
   ]);
 
   const staff = [...new Set(subjects.map((s) => s.faculty).filter(Boolean).map(String))];
-  return { students: students.map((s) => String(s._id)), staff };
+  return { students: students.map(idOf), staff };
 }
 
 export const publishExam = asyncHandler(async (req, res) => {
@@ -240,7 +240,7 @@ async function loadVisible(user, examId) {
 
   if (user.role === 'student') {
     const sameYear = Number(exam.semester) === Number(user.semester);
-    const forThem = !exam.section || idOf(exam.section) === idOf(user.section);
+    const forThem = !exam.section || sameId(exam.section, user.section);
     if (!sameYear || !forThem) {
       throw ApiError.forbidden('That timetable is not for your year');
     }
@@ -252,7 +252,7 @@ export const downloadExamFile = asyncHandler(async (req, res) => {
   const exam = await loadVisible(req.user, req.params.examId);
 
   const attachment = (exam.attachments || []).find(
-    (a) => String(a._id) === String(req.params.attachmentId)
+    (a) => sameId(a._id, req.params.attachmentId)
   );
   if (!attachment) throw ApiError.notFound('That file is not on this timetable');
 

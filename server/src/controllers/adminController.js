@@ -16,6 +16,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { parseCSVToObjects } from '../utils/csv.js';
 import { parseStudentsPDF } from '../services/pdfParser.js';
 import { todayKey, addDays } from '../utils/date.js';
+import { idOf, sameId } from '../utils/ids.js';
 import { notify } from '../services/notificationService.js';
 import {
   purgeSection,
@@ -241,7 +242,7 @@ export const listUsers = asyncHandler(async (req, res) => {
   const threshold = below === undefined || below === '' ? null : Number(below);
   let data = users.map((u) => ({
     ...shapeUser(u),
-    attendance: u.role === 'student' ? overall[String(u._id)] || null : null,
+    attendance: u.role === 'student' ? overall[idOf(u)] || null : null,
   }));
 
   if (threshold !== null && Number.isFinite(threshold)) {
@@ -287,20 +288,30 @@ export const getStudentProfile = asyncHandler(async (req, res) => {
 /** Faculty with their teaching load — used when assigning a subject. */
 export const listFacultyWithLoad = asyncHandler(async (_req, res) => {
   const faculty = await User.find({ role: 'faculty', isActive: true }).sort({ name: 1 }).lean();
-  const subjects = await Subject.find({ isActive: true }).populate('section', 'name').lean();
+  /*
+   * Sorted, because this list is rendered verbatim under each lecturer's
+   * name: unsorted, Mongo's natural order put the same lecturer's subjects
+   * in a different sequence on different machines, which reads as the data
+   * having changed when nothing has. Code is the label an admin scans for;
+   * section breaks the tie between two offerings sharing one code.
+   */
+  const subjects = await Subject.find({ isActive: true })
+    .sort({ code: 1, section: 1 })
+    .populate('section', 'name')
+    .lean();
   const entries = await TimetableEntry.find().lean();
 
   res.json({
     success: true,
     data: faculty.map((f) => {
-      const mine = subjects.filter((s) => String(s.faculty) === String(f._id));
+      const mine = subjects.filter((s) => sameId(s.faculty, f._id));
       return {
         id: String(f._id),
         name: f.name,
         email: f.email,
         employeeId: f.employeeId,
         subjectCount: mine.length,
-        periodsPerWeek: entries.filter((e) => String(e.faculty) === String(f._id)).length,
+        periodsPerWeek: entries.filter((e) => sameId(e.faculty, f._id)).length,
         subjects: mine.map((s) => `${s.code} · Sec ${s.section?.name ?? '—'}`),
       };
     }),
@@ -491,7 +502,7 @@ export const importStudents = asyncHandler(async (req, res) => {
    * email — and any other column it happens to carry is simply ignored.
    */
   const fixedSection = req.body.sectionId
-    ? sections.find((s) => String(s._id) === String(req.body.sectionId))
+    ? sections.find((s) => sameId(s._id, req.body.sectionId))
     : null;
   if (req.body.sectionId && !fixedSection) {
     throw ApiError.badRequest('That section does not belong to the chosen semester');
@@ -638,8 +649,8 @@ export const listSections = asyncHandler(async (_req, res) => {
       { $group: { _id: '$section', n: { $sum: 1 } } },
     ]),
   ]);
-  const students = Object.fromEntries(studentRows.map((r) => [String(r._id), r.n]));
-  const subjects = Object.fromEntries(subjectRows.map((r) => [String(r._id), r.n]));
+  const students = Object.fromEntries(studentRows.map((r) => [idOf(r), r.n]));
+  const subjects = Object.fromEntries(subjectRows.map((r) => [idOf(r), r.n]));
 
   res.json({
     success: true,
@@ -650,8 +661,8 @@ export const listSections = asyncHandler(async (_req, res) => {
       semester: s.semester,
       department: s.department,
       isActive: s.isActive,
-      studentCount: students[String(s._id)] || 0,
-      subjectCount: subjects[String(s._id)] || 0,
+      studentCount: students[idOf(s)] || 0,
+      subjectCount: subjects[idOf(s)] || 0,
     })),
   });
 });
@@ -844,27 +855,27 @@ export const listSubjectsAdmin = asyncHandler(async (req, res) => {
           .lean()
       : [],
   ]);
-  const enrolled = Object.fromEntries(enrolRows.map((r) => [String(r._id), r.n]));
-  const conducted = Object.fromEntries(sessionRows.map((r) => [String(r._id), r.n]));
+  const enrolled = Object.fromEntries(enrolRows.map((r) => [idOf(r), r.n]));
+  const conducted = Object.fromEntries(sessionRows.map((r) => [idOf(r), r.n]));
 
   // subjectId -> Map(facultyId -> name), built from actual per-period overrides.
   const coveringFaculty = new Map();
   for (const row of entryFacultyRows) {
     if (!row.faculty) continue;
-    const sid = String(row.subject);
+    const sid = idOf(row.subject);
     if (!coveringFaculty.has(sid)) coveringFaculty.set(sid, new Map());
-    coveringFaculty.get(sid).set(String(row.faculty._id), row.faculty.name);
+    coveringFaculty.get(sid).set(idOf(row.faculty), row.faculty.name);
   }
 
   res.json({
     success: true,
     data: subjects.map((s) => {
-      const sid = String(s._id);
+      const sid = idOf(s);
       // The subject's own lecturer first, then anyone else who covers a
       // period of it, deduplicated by id — never a hard-coded name, always
       // whatever the timetable actually says right now.
       const names = new Map();
-      if (s.faculty) names.set(String(s.faculty._id), s.faculty.name);
+      if (s.faculty) names.set(idOf(s.faculty), s.faculty.name);
       for (const [fid, name] of coveringFaculty.get(sid) || []) names.set(fid, name);
 
       return {
@@ -1021,7 +1032,7 @@ export const getSubjectRosterAdmin = asyncHandler(async (req, res) => {
       .lean(),
   ]);
 
-  const enrolledIds = new Set(enrolments.map((e) => String(e.student?._id)));
+  const enrolledIds = new Set(enrolments.map((e) => idOf(e.student)));
 
   res.json({
     success: true,
@@ -1036,7 +1047,7 @@ export const getSubjectRosterAdmin = asyncHandler(async (req, res) => {
         }))
         .sort((a, b) => (a.rollNumber || '').localeCompare(b.rollNumber || '')),
       available: sectionStudents
-        .filter((s) => !enrolledIds.has(String(s._id)))
+        .filter((s) => !enrolledIds.has(idOf(s)))
         .map((s) => ({ id: String(s._id), name: s.name, rollNumber: s.rollNumber })),
     },
   });

@@ -11,6 +11,8 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { parseCSVToObjects, toCSV } from '../utils/csv.js';
 import { parseTimetablePDF } from '../services/pdfParser.js';
 import { todayKey, toUTCDate } from '../utils/date.js';
+import { idOf, sameId } from '../utils/ids.js';
+import { sectionIdOf } from '../utils/user.js';
 import { SLOTS, LUNCH, DAYS, parseDay, isValidSlot, dayName } from '../config/slots.js';
 import {
   getWeek,
@@ -304,7 +306,7 @@ export const listAttendanceCandidates = asyncHandler(async (req, res) => {
   const entry = await loadEntryForAdmin(req.params.entryId);
   const date = req.query.date || todayKey();
 
-  const ownerId = String(entry.faculty?._id || entry.subject?.faculty || '');
+  const ownerId = idOf(entry.faculty) || idOf(entry.subject?.faculty) || '';
   const current = await delegationFor(entry, date);
 
   const [faculty, { byDate }] = await Promise.all([
@@ -321,11 +323,11 @@ export const listAttendanceCandidates = asyncHandler(async (req, res) => {
     (o) =>
       o.slot === entry.slot &&
       !['moved-out', 'cancelled'].includes(o.origin) &&
-      String(o.entryId) !== String(entry._id)
+      !sameId(o.entryId, entry._id)
   );
   const busy = new Map();
   for (const o of atSlot) {
-    if (o.faculty) busy.set(String(o.faculty.id), o);
+    if (o.faculty) busy.set(idOf(o.faculty), o);
   }
 
   res.json({
@@ -349,7 +351,7 @@ export const listAttendanceCandidates = asyncHandler(async (req, res) => {
       // subject of its own.
       countsToward: current?.subject ? String(current.subject) : null,
       candidates: faculty.map((f) => {
-        const clash = busy.get(String(f._id));
+        const clash = busy.get(idOf(f));
         return {
           id: String(f._id),
           name: f.name,
@@ -419,7 +421,7 @@ export const setAttendanceBy = asyncHandler(async (req, res) => {
   });
 
   const owner = entry.faculty?._id || subject.faculty || null;
-  if (owner && String(owner) !== String(person._id)) {
+  if (owner && !sameId(owner, person._id)) {
     await notify([owner], {
       type: 'attendance:delegated',
       title: 'Someone else will mark your register',
@@ -491,7 +493,7 @@ export const getWeekGrid = asyncHandler(async (req, res) => {
      * sheet on the noticeboard does.
      */
     sectionId = undefined;
-    const own = req.user.sectionId();
+    const own = sectionIdOf(req.user);
     if (!own) throw ApiError.badRequest('You have not been assigned to a semester yet');
     const section = await Section.findById(own).lean();
     semester = section?.semester;
@@ -728,10 +730,10 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
   const facultyByEmail = new Map(faculty.map((f) => [f.email.toLowerCase(), f]));
   const facultyByName = new Map(faculty.map((f) => [normName(f.name), f]));
   const subjectByKey = new Map(
-    subjects.map((s) => [`${s.code.toUpperCase()}|${String(s.section?._id ?? '')}`, s])
+    subjects.map((s) => [`${s.code.toUpperCase()}|${idOf(s.section) ?? ''}`, s])
   );
   const subjectByName = new Map(
-    subjects.map((s) => [`${normName(s.name)}|${String(s.section?._id ?? '')}`, s])
+    subjects.map((s) => [`${normName(s.name)}|${idOf(s.section) ?? ''}`, s])
   );
 
   /*
@@ -746,7 +748,7 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
         sid,
         new Set(
           subjects
-            .filter((s) => String(s.section?._id ?? s.section) === sid)
+            .filter((s) => idOf(s.section) === sid)
             .map((s) => s.code.toUpperCase())
         )
       );
@@ -835,7 +837,7 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
        * enrolled — see the enrolment step below.
        */
       const owner = section || sections[0];
-      const sid = String(owner._id);
+      const sid = idOf(owner);
       let subject = null;
       let pendingSubject = null;
 
@@ -856,7 +858,7 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
          * what the subject is called.
          */
         if (subject && normName(subject.name) !== normName(subjName)) {
-          renames.set(String(subject._id), { from: subject.name, to: subjName });
+          renames.set(idOf(subject), { from: subject.name, to: subjName });
           subject.name = subjName;
         }
       }
@@ -903,7 +905,7 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
       } else if (facName) {
         facultyRef = resolveFaculty(facName);
       } else if (subject?.faculty) {
-        const hit = faculty.find((f) => String(f._id) === String(subject.faculty));
+        const hit = faculty.find((f) => sameId(f._id, subject.faculty));
         if (hit) facultyRef = { id: hit._id, name: hit.name, isNew: false };
       }
 

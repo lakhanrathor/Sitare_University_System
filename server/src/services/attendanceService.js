@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Enrollment from '../models/Enrollment.js';
 import ClassSession from '../models/ClassSession.js';
 import Attendance, { PRESENT_STATUSES } from '../models/Attendance.js';
+import { idOf } from '../utils/ids.js';
 
 const oid = (id) => new mongoose.Types.ObjectId(String(id));
 
@@ -31,7 +32,7 @@ export async function getConductedCounts(subjectIds) {
     { $match: { subject: { $in: subjectIds.map(oid) }, status: 'completed' } },
     { $group: { _id: '$subject', conducted: { $sum: 1 } } },
   ]);
-  return Object.fromEntries(rows.map((r) => [String(r._id), r.conducted]));
+  return Object.fromEntries(rows.map((r) => [idOf(r), r.conducted]));
 }
 
 /**
@@ -61,7 +62,7 @@ async function getStudentSubjectTallies(studentId, subjectIds) {
       },
     },
   ]);
-  return Object.fromEntries(rows.map((r) => [String(r._id), r]));
+  return Object.fromEntries(rows.map((r) => [idOf(r), r]));
 }
 
 /**
@@ -99,7 +100,7 @@ export async function getOverallForStudents(studentIds) {
 
   return Object.fromEntries(
     rows.map((r) => [
-      String(r._id),
+      idOf(r),
       {
         conducted: r.conducted,
         present: r.present,
@@ -132,7 +133,7 @@ export async function getStudentSummary(studentId) {
   ]);
 
   const bySubject = subjects.map((s) => {
-    const key = String(s._id);
+    const key = idOf(s);
     const conducted = conductedMap[key] || 0;
     const tally = tallyMap[key] || { present: 0, markedAbsent: 0 };
     const present = tally.present;
@@ -200,10 +201,10 @@ export async function getStudentSubjectHistory(studentId, subjectId) {
     session: { $in: sessions.map((s) => s._id) },
   }).lean();
 
-  const bySession = new Map(records.map((r) => [String(r.session), r]));
+  const bySession = new Map(records.map((r) => [idOf(r.session), r]));
 
   return sessions.map((s) => {
-    const rec = bySession.get(String(s._id));
+    const rec = bySession.get(idOf(s));
     return {
       sessionId: String(s._id),
       date: s.dateKey,
@@ -239,7 +240,7 @@ export async function getSubjectRoster(subjectId) {
     .filter((s) => s && s.isActive !== false)
     .sort((a, b) => (a.rollNumber || '').localeCompare(b.rollNumber || ''));
 
-  const conducted = (await getConductedCounts([subjectId]))[String(subjectId)] || 0;
+  const conducted = (await getConductedCounts([subjectId]))[idOf(subjectId)] || 0;
 
   const rows = await Attendance.aggregate([
     { $match: { subject: oid(subjectId) } },
@@ -260,12 +261,12 @@ export async function getSubjectRoster(subjectId) {
       },
     },
   ]);
-  const presentMap = Object.fromEntries(rows.map((r) => [String(r._id), r.present]));
+  const presentMap = Object.fromEntries(rows.map((r) => [idOf(r), r.present]));
 
   return {
     conducted,
     students: students.map((s) => {
-      const present = presentMap[String(s._id)] || 0;
+      const present = presentMap[idOf(s)] || 0;
       return {
         studentId: String(s._id),
         name: s.name,

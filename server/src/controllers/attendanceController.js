@@ -8,6 +8,8 @@ import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { toDateKey, toUTCDate, todayKey, isFutureKey, addDays } from '../utils/date.js';
+import { idOf, sameId } from '../utils/ids.js';
+import { safeUser } from '../utils/user.js';
 import {
   resolveOccurrences,
   getPublishedTimetable,
@@ -37,7 +39,7 @@ async function slotsRunningOn(subject, dateKey) {
   const live = (byDate[dateKey] || []).filter(
     (o) =>
       o.subject &&
-      String(o.subject.id) === String(subject._id) &&
+      sameId(o.subject.id, subject._id) &&
       !['cancelled', 'moved-out'].includes(o.origin) &&
       // Office hours are not a class — nobody is enrolled to attend them, so
       // they cannot be one of the periods a register is applied across.
@@ -61,7 +63,7 @@ async function classKindOn(subject, dateKey, slot) {
   const hit = (byDate[dateKey] || []).find(
     (o) =>
       o.subject &&
-      String(o.subject.id) === String(subject._id) &&
+      sameId(o.subject.id, subject._id) &&
       o.slot === Number(slot) &&
       !['cancelled', 'moved-out'].includes(o.origin)
   );
@@ -72,7 +74,7 @@ async function standInClasses(user, subjectId) {
   if (user.role !== 'faculty') return null;
   const subject = await Subject.findById(subjectId).select('faculty').lean();
   if (!subject) return null;
-  if (String(subject.faculty) === String(user._id)) return null;
+  if (sameId(subject.faculty, user._id)) return null;
   const rows = await AttendanceDelegation.find({ subject: subjectId, faculty: user._id }).lean();
   return rows.length ? rows : null;
 }
@@ -196,7 +198,7 @@ export const getStudentAttendance = asyncHandler(async (req, res) => {
   const summary = await getStudentSummary(student._id);
   res.json({
     success: true,
-    data: { student: student.toSafeJSON(), ...summary },
+    data: { student: safeUser(student), ...summary },
   });
 });
 
@@ -271,7 +273,7 @@ export const listSubjectOccurrences = asyncHandler(async (req, res) => {
   const coTeaching =
     !standingIn &&
     req.user.role === 'faculty' &&
-    String(subject.faculty) !== String(req.user._id);
+    !sameId(subject.faculty, req.user._id);
 
   /*
    * Two different windows on purpose. The recurring grid only means anything
@@ -298,7 +300,7 @@ export const listSubjectOccurrences = asyncHandler(async (req, res) => {
   const map = new Map(); // "date|slot" -> row
   for (const list of Object.values(byDate)) {
     for (const o of list) {
-      if (!o.subject || String(o.subject.id) !== String(subject._id)) continue;
+      if (!o.subject || !sameId(o.subject.id, subject._id)) continue;
       // A cancelled or relocated class is not something to record here.
       if (o.origin === 'cancelled' || o.origin === 'moved-out') continue;
       // Office hours are not a class — nobody is enrolled to sit them, so
@@ -356,7 +358,7 @@ export const listSubjectOccurrences = asyncHandler(async (req, res) => {
   } else if (coTeaching) {
     // Exactly the days actually resolved to this lecturer — a subject split
     // by day never offers a class that still belongs to someone else.
-    rows = rows.filter((o) => o.faculty && String(o.faculty) === String(req.user._id));
+    rows = rows.filter((o) => o.faculty && sameId(o.faculty, req.user._id));
   }
 
   const occurrences = rows
@@ -412,7 +414,7 @@ export const getAttendanceSheet = asyncHandler(async (req, res) => {
   if (session) {
     const records = await Attendance.find({ session: session._id }).lean();
     marks = Object.fromEntries(
-      records.map((r) => [String(r.student), { status: r.status, remark: r.remark }])
+      records.map((r) => [idOf(r.student), { status: r.status, remark: r.remark }])
     );
   }
 
@@ -529,12 +531,12 @@ export const markAttendance = asyncHandler(async (req, res) => {
   if (!enrollments.length) {
     throw ApiError.badRequest('No students are enrolled in this subject yet');
   }
-  const enrolledIds = new Set(enrollments.map((e) => String(e.student)));
+  const enrolledIds = new Set(enrollments.map((e) => idOf(e.student)));
 
   const submitted = new Map();
   for (const r of records) {
-    if (!enrolledIds.has(String(r.studentId))) continue; // ignore non-enrolled ids
-    submitted.set(String(r.studentId), r);
+    if (!enrolledIds.has(idOf(r.studentId))) continue; // ignore non-enrolled ids
+    submitted.set(idOf(r.studentId), r);
   }
   if (!submitted.size) throw ApiError.badRequest('No valid enrolled students in the submission');
 

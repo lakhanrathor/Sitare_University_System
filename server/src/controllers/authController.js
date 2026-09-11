@@ -5,6 +5,7 @@ import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { signToken } from '../middleware/auth.js';
 import { auditLog } from '../utils/audit.js';
+import { checkPassword, safeUser } from '../utils/user.js';
 import { env } from '../config/env.js';
 
 export const loginSchema = z.object({
@@ -34,7 +35,7 @@ export const login = asyncHandler(async (req, res) => {
     .select('+password')
     // Section is populated so the client gets its name on the very first load.
     .populate('section', 'name semester');
-  if (!user || !(await user.comparePassword(password))) {
+  if (!user || !(await checkPassword(user, password))) {
     // Same message either way — confirming an email is registered is its own leak.
     auditLog('login_failed', { email: email.toLowerCase() });
     throw ApiError.unauthorized('Incorrect email or password');
@@ -47,7 +48,7 @@ export const login = asyncHandler(async (req, res) => {
   auditLog('login_success', { userId: String(user._id), role: user.role });
   res.json({
     success: true,
-    data: { token: signToken(user), user: user.toSafeJSON() },
+    data: { token: signToken(user), user: safeUser(user) },
   });
 });
 
@@ -135,19 +136,19 @@ export const googleLogin = asyncHandler(async (req, res) => {
   const user = await resolveGoogleUser(payload);
   res.json({
     success: true,
-    data: { token: signToken(user), user: user.toSafeJSON() },
+    data: { token: signToken(user), user: safeUser(user) },
   });
 });
 
 export const me = asyncHandler(async (req, res) => {
-  res.json({ success: true, data: { user: req.user.toSafeJSON() } });
+  res.json({ success: true, data: { user: safeUser(req.user) } });
 });
 
 export const changePassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const user = await User.findById(req.user._id).select('+password');
 
-  if (!(await user.comparePassword(currentPassword))) {
+  if (!(await checkPassword(user, currentPassword))) {
     auditLog('password_change_failed', { userId: String(req.user._id) });
     throw ApiError.badRequest('Current password is incorrect');
   }

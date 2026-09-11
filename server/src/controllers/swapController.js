@@ -6,6 +6,7 @@ import { sectionLabel } from '../models/Section.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { toUTCDate, todayKey, dayOfWeek, weekDates } from '../utils/date.js';
+import { idOf, sameId } from '../utils/ids.js';
 import { dayName } from '../config/slots.js';
 import {
   moveAttendanceSession,
@@ -94,19 +95,19 @@ export const createSwap = asyncHandler(async (req, res) => {
 
   const [fromEntry, toEntry] = await Promise.all([loadEntry(fromEntryId), loadEntry(toEntryId)]);
   if (!fromEntry || !toEntry) throw ApiError.notFound('One of those periods is not on the timetable');
-  if (String(fromEntry._id) === String(toEntry._id)) {
+  if (sameId(fromEntry._id, toEntry._id)) {
     throw ApiError.badRequest('Pick two different periods');
   }
 
   // The requester must own the "from" side.
   const fromFaculty = facultyOf(fromEntry);
-  if (req.user.role !== 'admin' && String(fromFaculty) !== String(req.user._id)) {
+  if (req.user.role !== 'admin' && !sameId(fromFaculty, req.user._id)) {
     throw ApiError.forbidden('You can only offer a class you teach');
   }
 
   const toFaculty = facultyOf(toEntry);
   if (!toFaculty) throw ApiError.badRequest('The other period has no lecturer assigned');
-  if (String(toFaculty) === String(fromFaculty)) {
+  if (sameId(toFaculty, fromFaculty)) {
     throw ApiError.badRequest('Both periods are yours — move the class instead of swapping');
   }
 
@@ -206,7 +207,7 @@ export const createSwap = asyncHandler(async (req, res) => {
     meta: { swapId: String(swap._id) },
   });
 
-  emitToUsers([String(toFaculty), ...(await adminIds())], 'swap:updated', {
+  emitToUsers([idOf(toFaculty), ...(await adminIds())], 'swap:updated', {
     swapId: String(swap._id),
     status: 'pending',
   });
@@ -294,11 +295,11 @@ export const listSwaps = asyncHandler(async (req, res) => {
        * has agreed — see decideSwap.
        */
       canAccept:
-        s.status === 'pending' && String(s.counterparty._id) === String(req.user._id),
+        s.status === 'pending' && sameId(s.counterparty._id, req.user._id),
       canDecline:
-        SWAP_OPEN.includes(s.status) && String(s.counterparty._id) === String(req.user._id),
+        SWAP_OPEN.includes(s.status) && sameId(s.counterparty._id, req.user._id),
       canWithdraw:
-        SWAP_OPEN.includes(s.status) && String(s.requestedBy._id) === String(req.user._id),
+        SWAP_OPEN.includes(s.status) && sameId(s.requestedBy._id, req.user._id),
       canApprove: req.user.role === 'admin' && s.status === 'accepted',
       canReject: req.user.role === 'admin' && SWAP_OPEN.includes(s.status),
       /** Kept for older callers: an admin acting on a live request. */
@@ -529,7 +530,7 @@ export const decideSwap = asyncHandler(async (req, res) => {
 export const acceptSwap = asyncHandler(async (req, res) => {
   const swap = await SwapRequest.findById(req.params.swapId);
   if (!swap) throw ApiError.notFound('Swap request not found');
-  if (String(swap.counterparty) !== String(req.user._id)) {
+  if (!sameId(swap.counterparty, req.user._id)) {
     throw ApiError.forbidden('Only the lecturer being asked can accept this');
   }
   if (swap.status === 'accepted') throw ApiError.badRequest('You have already accepted this');
@@ -572,7 +573,7 @@ export const acceptSwap = asyncHandler(async (req, res) => {
 export const declineSwap = asyncHandler(async (req, res) => {
   const swap = await SwapRequest.findById(req.params.swapId);
   if (!swap) throw ApiError.notFound('Swap request not found');
-  if (String(swap.counterparty) !== String(req.user._id)) {
+  if (!sameId(swap.counterparty, req.user._id)) {
     throw ApiError.forbidden('Only the other lecturer can decline this');
   }
   // Changing their mind before the admin acts is still their call.
@@ -602,7 +603,7 @@ export const declineSwap = asyncHandler(async (req, res) => {
 export const withdrawSwap = asyncHandler(async (req, res) => {
   const swap = await SwapRequest.findById(req.params.swapId);
   if (!swap) throw ApiError.notFound('Swap request not found');
-  if (String(swap.requestedBy) !== String(req.user._id)) {
+  if (!sameId(swap.requestedBy, req.user._id)) {
     throw ApiError.forbidden('Only the requester can withdraw this');
   }
   // Withdrawable right up until the admin decides, accepted or not.
@@ -646,8 +647,8 @@ export const listSwapCandidates = asyncHandler(async (req, res) => {
    * and a plain event like "Session with Dean" has no lecturer. Reading
    * through either would throw before the caller ever sees a useful answer.
    */
-  const myFaculty = facultyOf(mine) ? String(facultyOf(mine)) : null;
-  const mySection = mine.section ? String(mine.section._id) : null;
+  const myFaculty = idOf(facultyOf(mine));
+  const mySection = idOf(mine.section);
   const mySemester = semesterOf(mine);
 
   if (!myFaculty) {
@@ -676,7 +677,7 @@ export const listSwapCandidates = asyncHandler(async (req, res) => {
     .flatMap(liveOn)
     .filter((o) => o.kind === 'lecture')
     .filter((o) => o.date >= todayKey())
-    .filter((o) => o.entryId !== String(mine._id))
+    .filter((o) => !sameId(o.entryId, mine))
     .filter((o) => o.faculty && o.faculty.id !== myFaculty);
 
   const slotLabel = await slotNamer(mine.subject?.semester || mine.section?.semester);
@@ -685,7 +686,7 @@ export const listSwapCandidates = asyncHandler(async (req, res) => {
     .map((o) => {
       const theirSection = o.section?.id || null;
       const theirFaculty = o.faculty.id;
-      const ignore = new Set([String(mine._id), o.entryId]);
+      const ignore = new Set([idOf(mine), o.entryId]);
 
       /*
        * A cohort being busy rules a swap out, and so does a lecturer already

@@ -3,6 +3,7 @@ import LeaveDocument from '../models/LeaveDocument.js';
 import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { sameId } from '../utils/ids.js';
 import { putFile, openFile, deleteFiles } from '../services/fileStore.js';
 import { notify, adminIds } from '../services/notificationService.js';
 
@@ -136,7 +137,7 @@ export const submitLeave = asyncHandler(async (req, res) => {
 async function loadVisible(user, docId) {
   const doc = await LeaveDocument.findById(docId);
   if (!doc) throw ApiError.notFound('That application no longer exists');
-  const mine = String(doc.student) === String(user._id);
+  const mine = sameId(doc.student, user._id);
   if (user.role !== 'admin' && !mine) {
     throw ApiError.forbidden('That application is not yours');
   }
@@ -148,7 +149,7 @@ export const downloadAttachment = asyncHandler(async (req, res) => {
   const doc = await loadVisible(req.user, req.params.docId);
 
   const attachment = (doc.attachments || []).find(
-    (a) => String(a._id) === String(req.params.attachmentId)
+    (a) => sameId(a._id, req.params.attachmentId)
   );
   if (!attachment) throw ApiError.notFound('That attachment is not on this application');
 

@@ -12,6 +12,7 @@
     "seed:demo": "node src/seed/fixture.js",
     "security-check": "node security-check.mjs",
     "google-auth-check": "node google-auth-check.mjs",
+    "guard:ids": "node guard-ids.mjs",
     "api-snapshot": "node api-snapshot.mjs",
     "create-admin": "node create-admin.mjs"
   },

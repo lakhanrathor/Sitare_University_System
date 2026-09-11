@@ -7,6 +7,7 @@ import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getConductedCounts, getSubjectRoster } from '../services/attendanceService.js';
 import { todayKey, dayOfWeek } from '../utils/date.js';
+import { idOf, sameId } from '../utils/ids.js';
 import { getPublishedTimetables } from '../services/timetableService.js';
 import { dayName } from '../config/slots.js';
 
@@ -31,7 +32,7 @@ export async function assertSubjectAccess(user, subjectId) {
   const subject = await Subject.findById(subjectId);
   if (!subject) throw ApiError.notFound('Subject not found');
   if (user.role === 'admin') return subject;
-  if (user.role === 'faculty' && String(subject.faculty) === String(user._id)) return subject;
+  if (user.role === 'faculty' && sameId(subject.faculty, user._id)) return subject;
 
   if (user.role === 'faculty' && (await hasFacultyOverride(subject._id, user._id))) return subject;
 
@@ -52,7 +53,7 @@ export async function assertRegisterAccess(user, subjectId, dateKey, slot) {
   const subject = await Subject.findById(subjectId);
   if (!subject) throw ApiError.notFound('Subject not found');
   if (user.role === 'admin') return subject;
-  if (user.role === 'faculty' && String(subject.faculty) === String(user._id)) return subject;
+  if (user.role === 'faculty' && sameId(subject.faculty, user._id)) return subject;
 
   if (user.role === 'faculty') {
     const delegated = await AttendanceDelegation.exists({
@@ -105,7 +106,7 @@ export const listSubjects = asyncHandler(async (req, res) => {
   const delegatedBySubject = new Map();
   for (const d of myDelegations) {
     if (d.dateKey < today) continue; // stand-in's job is done once the covered day has passed
-    const k = String(d.subject);
+    const k = idOf(d.subject);
     if (!delegatedBySubject.has(k)) delegatedBySubject.set(k, []);
     delegatedBySubject.get(k).push(d);
   }
@@ -120,7 +121,7 @@ export const listSubjects = asyncHandler(async (req, res) => {
     role === 'faculty'
       ? await TimetableEntry.find({ faculty: _id }).select('subject').lean()
       : [];
-  const overriddenSubjectIds = [...new Set(myOverrides.map((o) => String(o.subject)).filter(Boolean))];
+  const overriddenSubjectIds = [...new Set(myOverrides.map((o) => idOf(o.subject)).filter(Boolean))];
 
   if (role === 'faculty') {
     subjects = await Subject.find({
@@ -160,7 +161,7 @@ export const listSubjects = asyncHandler(async (req, res) => {
       { $group: { _id: '$subject', n: { $sum: 1 } } },
     ]),
   ]);
-  const enrolledMap = Object.fromEntries(enrolledRows.map((r) => [String(r._id), r.n]));
+  const enrolledMap = Object.fromEntries(enrolledRows.map((r) => [idOf(r), r.n]));
 
   /*
    * Every lecturer covering a day of these subjects, on either side of a
@@ -184,10 +185,10 @@ export const listSubjects = asyncHandler(async (req, res) => {
       : [];
     for (const r of rows) {
       if (!r.faculty) continue;
-      const sid = String(r.subject);
+      const sid = idOf(r.subject);
       if (!dayCoverageBySubject.has(sid)) dayCoverageBySubject.set(sid, new Map());
       const byFaculty = dayCoverageBySubject.get(sid);
-      const fid = String(r.faculty._id);
+      const fid = idOf(r.faculty);
       if (!byFaculty.has(fid)) byFaculty.set(fid, { name: r.faculty.name, days: new Set() });
       byFaculty.get(fid).days.add(r.dayOfWeek);
     }
@@ -195,8 +196,8 @@ export const listSubjects = asyncHandler(async (req, res) => {
 
   const data = subjects
     .map((s) => {
-      const sid = String(s._id);
-      const iOwnDefault = String(s.faculty?._id) === String(_id);
+      const sid = idOf(s);
+      const iOwnDefault = sameId(s.faculty?._id, _id);
       const byFaculty = dayCoverageBySubject.get(sid);
 
       /*
@@ -208,12 +209,12 @@ export const listSubjects = asyncHandler(async (req, res) => {
       if (role === 'faculty' && byFaculty) {
         if (iOwnDefault) {
           const partners = [...byFaculty.entries()]
-            .filter(([fid]) => fid !== String(_id))
+            .filter(([fid]) => fid !== idOf(_id))
             .map(([, v]) => ({ name: v.name, days: [...v.days].sort().map(dayName) }))
             .filter((p) => p.days.length);
           if (partners.length) coTeaching = { role: 'owner', partners };
-        } else if (byFaculty.has(String(_id))) {
-          const mine = byFaculty.get(String(_id));
+        } else if (byFaculty.has(idOf(_id))) {
+          const mine = byFaculty.get(idOf(_id));
           coTeaching = {
             role: 'partner',
             mainTeacher: s.faculty?.name || null,

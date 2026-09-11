@@ -7,6 +7,7 @@ import Subject from '../models/Subject.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { toUTCDate, todayKey, dayOfWeek } from '../utils/date.js';
+import { sameId } from '../utils/ids.js';
 import { isTeachingDay, dayName } from '../config/slots.js';
 import {
   findConflicts,
@@ -67,8 +68,8 @@ function assertBookableDate(key) {
 function assertOwnsEntry(user, entry) {
   if (user.role === 'admin') return;
   const owns =
-    (entry.faculty && String(entry.faculty) === String(user._id)) ||
-    (entry.subject?.faculty && String(entry.subject.faculty) === String(user._id));
+    (entry.faculty && sameId(entry.faculty, user._id)) ||
+    (entry.subject?.faculty && sameId(entry.subject.faculty, user._id));
   if (!owns) throw ApiError.forbidden('This period belongs to another faculty member');
 }
 
@@ -102,7 +103,7 @@ export const listFreeSlots = asyncHandler(async (req, res) => {
 
   const sections = await Section.find({ isActive: true }).sort({ name: 1 }).lean();
   let scoped = req.query.section
-    ? sections.filter((s) => String(s._id) === String(req.query.section))
+    ? sections.filter((s) => sameId(s._id, req.query.section))
     : sections;
   if (req.query.semester) {
     scoped = scoped.filter((s) => s.semester === Number(req.query.semester));
@@ -165,10 +166,10 @@ export const bookExtraClass = asyncHandler(async (req, res) => {
   if (subjectId) {
     subject = await Subject.findById(subjectId).populate('section', 'name');
     if (!subject) throw ApiError.notFound('Subject not found');
-    if (String(subject.section?._id) !== String(section._id)) {
+    if (!sameId(subject.section?._id, section._id)) {
       throw ApiError.badRequest(`${subject.code} is not offered to section ${section.name}`);
     }
-    if (req.user.role === 'faculty' && String(subject.faculty) !== String(req.user._id)) {
+    if (req.user.role === 'faculty' && !sameId(subject.faculty, req.user._id)) {
       throw ApiError.forbidden('You do not teach that subject');
     }
   } else if (!title) {
@@ -487,7 +488,7 @@ export const undoChange = asyncHandler(async (req, res) => {
     if (change.swapRequest) {
       throw ApiError.forbidden('Only an admin can unpick an approved swap');
     }
-    if (String(change.createdBy) !== String(req.user._id)) {
+    if (!sameId(change.createdBy, req.user._id)) {
       throw ApiError.forbidden('Only the person who made this change, or an admin, can undo it');
     }
   }
