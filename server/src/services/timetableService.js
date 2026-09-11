@@ -1,22 +1,31 @@
-import Timetable from '../models/Timetable.js';
-import TimetableEntry from '../models/TimetableEntry.js';
-import ScheduleChange from '../models/ScheduleChange.js';
-import ClassSession from '../models/ClassSession.js';
-import AttendanceDelegation from '../models/AttendanceDelegation.js';
+import { prisma } from '../config/prisma.js';
 import { dayOfWeek, weekDates } from '../utils/date.js';
 import { idOf, sameId } from '../utils/ids.js';
 import { SLOTS, LUNCH, isTeachingDay } from '../config/slots.js';
 
 /** The one live grid for a semester, or null before anything is published. */
 export function getPublishedTimetable(semester) {
-  const filter = { status: 'published' };
-  if (semester) filter.semester = Number(semester);
-  return Timetable.findOne(filter).sort({ publishedAt: -1 }).lean();
+  const where = { status: 'published' };
+  if (semester) where.semester = Number(semester);
+  /*
+   * publishedAt is nullable, and Postgres puts nulls first on a descending
+   * sort where Mongo puts them last — which would make a grid that was never
+   * actually published win over one that was. Said explicitly.
+   */
+  return prisma.timetable.findFirst({
+    where,
+    orderBy: { publishedAt: { sort: 'desc', nulls: 'last' } },
+    include: { slots: { orderBy: { slot: 'asc' } } },
+  });
 }
 
 /** Every live grid — one per semester. */
 export function getPublishedTimetables() {
-  return Timetable.find({ status: 'published' }).sort({ semester: 1 }).lean();
+  return prisma.timetable.findMany({
+    where: { status: 'published' },
+    orderBy: { semester: 'asc' },
+    include: { slots: { orderBy: { slot: 'asc' } } },
+  });
 }
 
 /**
@@ -37,10 +46,10 @@ export async function slotsForSemester(semester) {
 export const labelOf = (slots, n) =>
   slots.find((s) => s.slot === Number(n))?.label || `Period ${n}`;
 
-const personLite = (u) => (u ? { id: String(u._id), name: u.name, email: u.email } : null);
+const personLite = (u) => (u ? { id: idOf(u), name: u.name, email: u.email } : null);
 const subjectLite = (s) =>
-  s ? { id: String(s._id), code: s.code, name: s.name, minAttendance: s.minAttendance } : null;
-const sectionLite = (s) => (s ? { id: String(s._id), name: s.name } : null);
+  s ? { id: idOf(s), code: s.code, name: s.name, minAttendance: s.minAttendance } : null;
+const sectionLite = (s) => (s ? { id: idOf(s), name: s.name } : null);
 
 /**
  * Turn a recurring entry (plus the date it lands on) into a dated class.
@@ -52,7 +61,7 @@ function toOccurrence(entry, dateKey, slot, extras = {}) {
   return {
     // Stable per date+slot so React keys and conflict maps behave.
     id: `${idOf(entry) || idOf(extras.changeId)}-${dateKey}-${slot}`,
-    entryId: entry ? String(entry._id) : null,
+    entryId: entry ? idOf(entry) : null,
     changeId: extras.changeId || null,
     date: dateKey,
     slot,
@@ -79,8 +88,8 @@ function toOccurrence(entry, dateKey, slot, extras = {}) {
     movedFrom: extras.movedFrom || null,
     movedTo: extras.movedTo || null,
     reason: extras.reason || '',
-    swapRequest: extras.swapRequest ? String(extras.swapRequest) : null,
-    createdBy: extras.createdBy ? String(extras.createdBy) : null,
+    swapRequest: extras.swapRequest ? idOf(extras.swapRequest) : null,
+    createdBy: extras.createdBy ? idOf(extras.createdBy) : null,
   };
 }
 
@@ -102,7 +111,10 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
    */
   let timetables;
   if (timetableId) {
-    const one = await Timetable.findById(timetableId).lean();
+    const one = await prisma.timetable.findUnique({
+      where: { id: timetableId },
+      include: { slots: { orderBy: { slot: 'asc' } } },
+    });
     timetables = one ? [one] : [];
   } else {
     timetables = await getPublishedTimetables();
@@ -113,51 +125,52 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
   const timetable = timetables[0] || null;
   if (!timetables.length || !dates.length) return { timetable, timetables, byDate: {} };
 
-  const entryFilter = { timetable: { $in: timetables.map((t) => t._id) } };
+  const timetableIds = timetables.map(idOf);
+
+  const entryWhere = { timetableId: { in: timetableIds } };
   // A section-less period belongs to the whole semester, so it stays visible
   // even when the caller is scoped to one cohort.
-  if (sectionId) entryFilter.$or = [{ section: sectionId }, { section: null }];
+  if (sectionId) entryWhere.OR = [{ sectionId }, { sectionId: null }];
 
-  const populate = [
-    {
-      path: 'subject',
-      select: 'code name minAttendance section semester faculty',
-      // Its owner, so a period with no lecturer of its own can fall back to it.
-      populate: { path: 'faculty', select: 'name email' },
+  /* The relations every occurrence is built from, named once. */
+  const entryInclude = {
+    subject: {
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        minAttendance: true,
+        sectionId: true,
+        semester: true,
+        // Its owner, so a period with no lecturer of its own can fall back to it.
+        faculty: { select: { id: true, name: true, email: true } },
+      },
     },
-    { path: 'faculty', select: 'name email' },
-    { path: 'section', select: 'name semester' },
-  ];
+    faculty: { select: { id: true, name: true, email: true } },
+    section: { select: { id: true, name: true, semester: true } },
+  };
 
   // An event names no subject and no cohort, so its year comes from the
   // timetable it was printed on.
   const semesterOfTimetable = new Map(timetables.map((t) => [idOf(t), t.semester]));
 
   const [entries, changes] = await Promise.all([
-    TimetableEntry.find(entryFilter).populate(populate).lean(),
-    ScheduleChange.find({
-      $and: [
-        // Scoped to the same timetables as the entries above. Without this, an
-        // extra class has nothing else tying it to a semester — a section-less
-        // booking has section: null, which the section filter below matches for
-        // every semester alike — so one semester's extra class would appear on
-        // every other semester's grid at the same date and period number.
-        { timetable: { $in: timetables.map((t) => t._id) } },
-        { $or: [{ dateKey: { $in: dates } }, { toDateKey: { $in: dates } }] },
-        ...(sectionId ? [{ $or: [{ section: sectionId }, { section: null }] }] : []),
-      ],
-    })
-      .populate([
-        {
-          path: 'subject',
-          select: 'code name minAttendance section semester faculty',
-          populate: { path: 'faculty', select: 'name email' },
-        },
-        { path: 'faculty', select: 'name email' },
-        { path: 'section', select: 'name semester' },
-        { path: 'entry', populate },
-      ])
-      .lean(),
+    prisma.timetableEntry.findMany({ where: entryWhere, include: entryInclude }),
+    prisma.scheduleChange.findMany({
+      where: {
+        AND: [
+          // Scoped to the same timetables as the entries above. Without this, an
+          // extra class has nothing else tying it to a semester — a section-less
+          // booking has section: null, which the section filter below matches for
+          // every semester alike — so one semester's extra class would appear on
+          // every other semester's grid at the same date and period number.
+          { timetableId: { in: timetableIds } },
+          { OR: [{ dateKey: { in: dates } }, { toDateKey: { in: dates } }] },
+          ...(sectionId ? [{ OR: [{ sectionId }, { sectionId: null }] }] : []),
+        ],
+      },
+      include: { ...entryInclude, entry: { include: entryInclude } },
+    }),
   ]);
 
   const entriesByDay = new Map();
@@ -197,16 +210,16 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
             movedTo:
               change.kind === 'move' ? { date: change.toDateKey, slot: change.toSlot } : null,
             reason: change.reason,
-            changeId: String(change._id),
-            swapRequest: change.swapRequest,
-            semester: semesterOfTimetable.get(idOf(entry.timetable)),
+            changeId: change.id,
+            swapRequest: change.swapRequestId,
+            semester: semesterOfTimetable.get(entry.timetableId),
           })
         );
         continue;
       }
       list.push(
         toOccurrence(entry, dateKey, entry.slot, {
-          semester: semesterOfTimetable.get(idOf(entry.timetable)),
+          semester: semesterOfTimetable.get(entry.timetableId),
         })
       );
     }
@@ -218,10 +231,10 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
           origin: c.swapRequest ? 'swapped-in' : 'moved-in',
           movedFrom: { date: c.dateKey, slot: c.fromSlot ?? c.entry.slot },
           reason: c.reason,
-          changeId: String(c._id),
-          swapRequest: c.swapRequest,
-          createdBy: c.createdBy,
-          semester: semesterOfTimetable.get(idOf(c.entry.timetable)),
+          changeId: c.id,
+          swapRequest: c.swapRequestId,
+          createdBy: c.createdById,
+          semester: semesterOfTimetable.get(c.entry.timetableId),
         })
       );
     }
@@ -229,7 +242,7 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
     for (const c of extras.filter((e) => e.dateKey === dateKey)) {
       list.push(
         toOccurrence(null, dateKey, c.slot, {
-          changeId: String(c._id),
+          changeId: c.id,
           section: c.section,
           subject: c.subject,
           faculty: c.faculty,
@@ -238,7 +251,7 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
           room: c.room,
           origin: 'extra',
           reason: c.reason,
-          createdBy: c.createdBy,
+          createdBy: c.createdById,
         })
       );
     }
@@ -252,16 +265,17 @@ export async function resolveOccurrences(dateKeys, { timetableId, sectionId, sem
    * to the weekly grid. A hand-over arranged for one Tuesday leaves every
    * other Tuesday alone.
    */
-  const delegations = await AttendanceDelegation.find({ dateKey: { $in: dates } })
-    .populate('faculty', 'name email')
-    .lean();
+  const delegations = await prisma.attendanceDelegation.findMany({
+    where: { dateKey: { in: dates } },
+    include: { faculty: { select: { id: true, name: true, email: true } } },
+  });
 
   if (delegations.length) {
     const bySubject = new Map(
-      delegations.map((d) => [`${idOf(d.subject)}|${d.dateKey}|${d.slot}`, d])
+      delegations.map((d) => [`${d.subjectId}|${d.dateKey}|${d.slot}`, d])
     );
     const byEntry = new Map(
-      delegations.filter((d) => d.entry).map((d) => [`${idOf(d.entry)}|${d.dateKey}|${d.slot}`, d])
+      delegations.filter((d) => d.entryId).map((d) => [`${d.entryId}|${d.dateKey}|${d.slot}`, d])
     );
 
     for (const dateKey of dates) {
@@ -293,7 +307,7 @@ export async function getWeek(anchorDateKey, opts = {}) {
     sectionSplit,
     timetable: timetable
       ? {
-          id: String(timetable._id),
+          id: idOf(timetable),
           name: timetable.name,
           semester: timetable.semester,
           status: timetable.status,
@@ -303,7 +317,20 @@ export async function getWeek(anchorDateKey, opts = {}) {
     semester: opts.semester ? Number(opts.semester) : timetable?.semester || null,
     // The grid draws itself from the timetable's own periods.
     slots: slotsOf(timetable),
-    lunch: timetable?.lunch || LUNCH,
+    /*
+     * The break was one embedded object and is now four columns, reassembled
+     * here so every caller keeps the shape it already reads. All four are set
+     * together or none are — a CHECK constraint enforces that — so testing the
+     * start is enough to know whether there is a break at all.
+     */
+    lunch: timetable?.lunchStart
+      ? {
+          label: timetable.lunchLabel || 'LUNCH',
+          start: timetable.lunchStart,
+          end: timetable.lunchEnd,
+          afterSlot: timetable.lunchAfterSlot,
+        }
+      : LUNCH,
     weekStart: dates[0],
     days: dates.map((date) => ({
       date,
@@ -429,7 +456,7 @@ export async function getFreeSlots(dateKey, { facultyId, sections, semester } = 
         date: dateKey,
         slot: s.slot,
         label: s.label,
-        section: { id: String(section.id), name: section.name },
+        section: { id: idOf(section), name: section.name },
         /*
          * Whether the asking teacher already has a cohort then. Informational
          * only — a second cohort in the same period is a combined class, so
@@ -461,37 +488,44 @@ export async function moveAttendanceSession({
 }) {
   if (!subjectId) return null;
 
-  const session = await ClassSession.findOne({
-    subject: subjectId,
-    dateKey: fromDateKey,
-    slot: fromSlot,
+  const session = await prisma.classSession.findUnique({
+    where: {
+      subjectId_dateKey_slot: { subjectId, dateKey: fromDateKey, slot: Number(fromSlot) },
+    },
   });
   if (!session) return null;
 
   // Refuse to collide with a sheet already taken at the destination.
-  const clash = await ClassSession.findOne({
-    subject: subjectId,
-    dateKey: toDateKey,
-    slot: toSlot,
-    _id: { $ne: session._id },
+  const clash = await prisma.classSession.findFirst({
+    where: {
+      subjectId,
+      dateKey: toDateKey,
+      slot: Number(toSlot),
+      id: { not: session.id },
+    },
   });
   if (clash) return { moved: false, reason: 'A sheet already exists at the destination' };
 
-  session.dateKey = toDateKey;
-  session.date = new Date(`${toDateKey}T00:00:00.000Z`);
-  session.slot = toSlot;
-  if (facultyId) session.faculty = facultyId;
-  await session.save();
+  await prisma.classSession.update({
+    where: { id: session.id },
+    data: {
+      dateKey: toDateKey,
+      date: new Date(`${toDateKey}T00:00:00.000Z`),
+      slot: Number(toSlot),
+      ...(facultyId ? { facultyId: idOf(facultyId) } : {}),
+    },
+  });
 
-  return { moved: true, sessionId: String(session._id) };
+  return { moved: true, sessionId: session.id };
 }
 
 /** A cancelled class must not count against students. */
 export async function cancelAttendanceSession({ subjectId, dateKey, slot }) {
   if (!subjectId) return null;
-  const session = await ClassSession.findOne({ subject: subjectId, dateKey, slot });
+  const session = await prisma.classSession.findUnique({
+    where: { subjectId_dateKey_slot: { subjectId, dateKey, slot: Number(slot) } },
+  });
   if (!session) return null;
-  session.status = 'cancelled';
-  await session.save();
-  return { cancelled: true, sessionId: String(session._id) };
+  await prisma.classSession.update({ where: { id: session.id }, data: { status: 'cancelled' } });
+  return { cancelled: true, sessionId: session.id };
 }

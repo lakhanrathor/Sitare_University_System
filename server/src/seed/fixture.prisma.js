@@ -308,7 +308,7 @@ async function fixture() {
     entry(tt3, 5, 3, null, ethics, ananya),
     // Office hours must never be offered for attendance; keep one on the grid
     // so that exclusion is actually exercised rather than assumed.
-    entry(tt3, 4, 3, sec3A, dsa, ananya, { kind: 'officeHours' }),
+    entry(tt3, 4, 3, sec3A, dsa, ananya, { kind: 'office-hours' }),
     // A period with no subject — the "Session with Dean" shape.
     entry(tt3, 5, 1, sec3A, null, null, { kind: 'event', title: 'Session with Dean' }),
   ];
@@ -547,7 +547,7 @@ async function fixture() {
   await prisma.examSchedule.create({
     data: {
       title: 'Semester 3 mid-term',
-      examType: 'midTerm',
+      examType: 'mid-term',
       semester: 3,
       sectionId: null,
       instructions: 'Bring your ID card. No calculators.',
