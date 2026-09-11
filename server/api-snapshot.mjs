@@ -136,7 +136,17 @@ function canonical(value) {
   if (typeof value === 'object') {
     // Sorted keys so serialisation is stable regardless of insertion order.
     const out = {};
-    for (const k of Object.keys(value).sort()) out[k] = canonical(value[k]);
+    for (const k of Object.keys(value).sort()) {
+      /*
+       * The one value that cannot be reproduced tomorrow. Every other date is
+       * expressed as an offset from the fixture's anchor Monday and so stays
+       * put, but `today` is today — left alone it moves the baseline every
+       * midnight, and a check that reports a difference every single day is
+       * one people learn to skip past. The key is still asserted to exist;
+       * only which day it names is not.
+       */
+      out[k] = k === 'today' ? '@today' : canonical(value[k]);
+    }
     return out;
   }
 

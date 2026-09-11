@@ -1638,7 +1638,7 @@
         },
         "semester": 3
       },
-      "today": "@d+4"
+      "today": "@today"
     }
   },
   "admin/timetable/meta": {
@@ -3379,7 +3379,7 @@
         },
         "semester": 3
       },
-      "today": "@d+4"
+      "today": "@today"
     }
   },
   "faculty/sessions/:dsa": {
@@ -4219,7 +4219,7 @@
         },
         "semester": 3
       },
-      "today": "@d+4"
+      "today": "@today"
     }
   },
   "faculty2/notes": {

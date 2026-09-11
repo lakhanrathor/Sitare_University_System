@@ -33,12 +33,12 @@ export const uploadSchema = z.object({
 
 const editEntrySchema = z.object({
   /** Point the period at a different subject already on the semester. */
-  subjectId: z.string().length(24).nullable().optional(),
+  subjectId: z.string().uuid().nullable().optional(),
   /** Or name one: renames the current subject, or creates it if there is none. */
   subjectName: z.string().trim().min(1).max(160).optional(),
   subjectCode: z.string().trim().min(1).max(12).optional(),
 
-  facultyId: z.string().length(24).nullable().optional(),
+  facultyId: z.string().uuid().nullable().optional(),
   /**
    * 'subject' hands the whole subject to that lecturer everywhere it runs.
    * 'day' hands them only this subject's periods on this one recurring day —
