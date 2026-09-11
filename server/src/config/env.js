@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const required = ['MONGO_URI', 'JWT_SECRET'];
+const required = ['DATABASE_URL', 'JWT_SECRET'];
 const missing = required.filter((key) => !process.env[key]);
 
 if (missing.length) {
@@ -44,20 +44,10 @@ if (!googleClientId && !isProd) {
   console.warn('[config] GOOGLE_CLIENT_ID not set — Google sign-in is disabled.');
 }
 
-/*
- * PostgreSQL, during the migration off MongoDB. Optional on purpose: until a
- * module has actually been ported, the app runs entirely on Mongo and must
- * still boot on a checkout with no Postgres anywhere near it. The first module
- * that needs it fails loudly on its own rather than making every developer
- * stand up a database to run the parts that do not use one yet.
- */
-const databaseUrl = process.env.DATABASE_URL || null;
-
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 5000),
-  mongoUri: process.env.MONGO_URI,
-  databaseUrl,
+  databaseUrl: process.env.DATABASE_URL,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',

@@ -34,7 +34,15 @@ export function getPublishedTimetables() {
  * file was uploaded.
  */
 export const slotsOf = (timetable) =>
-  timetable?.slots?.length ? timetable.slots : SLOTS;
+  timetable?.slots?.length
+    ? /*
+       * Picked apart rather than passed through. The period list was an
+       * embedded array and is now a child table, whose rows also carry the
+       * timetable id that identifies them — sending that would add a field to
+       * every slot in every grid response that was never there before.
+       */
+      timetable.slots.map((s) => ({ slot: s.slot, label: s.label, start: s.start, end: s.end }))
+    : SLOTS;
 
 /** Period times for a semester, for anywhere that needs to print a label. */
 export async function slotsForSemester(semester) {

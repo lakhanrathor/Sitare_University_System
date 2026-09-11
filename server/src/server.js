@@ -1,7 +1,6 @@
 import http from 'http';
 import app from './app.js';
 import { env } from './config/env.js';
-import { connectDB } from './config/db.js';
 import { prisma } from './config/prisma.js';
 import { initSocket } from './sockets/index.js';
 
@@ -9,14 +8,10 @@ const server = http.createServer(app);
 
 async function start() {
   /*
-   * Both databases, for as long as the migration runs: a ported module reads
-   * Postgres and an un-ported one still reads Mongo. Connecting Prisma here
-   * rather than letting it connect lazily means a wrong DATABASE_URL fails at
-   * boot with one clear message instead of on whichever request happens to be
-   * the first to touch a ported module. The Mongo half goes away with the last
-   * ported controller.
+   * Connected here rather than left to connect lazily, so a wrong DATABASE_URL
+   * fails at boot with one clear message instead of on whichever request
+   * happens to touch the database first.
    */
-  await connectDB();
   await prisma.$connect();
   console.log('[db] PostgreSQL connected');
   initSocket(server);

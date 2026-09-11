@@ -182,7 +182,12 @@ export const getMySubjectHistory = asyncHandler(async (req, res) => {
  * only someone who actually teaches at least one subject they are enrolled in.
  */
 export const getStudentAttendance = asyncHandler(async (req, res) => {
-  const student = await prisma.user.findUnique({ where: { id: req.params.studentId } });
+  const student = await prisma.user.findUnique({
+    where: { id: req.params.studentId },
+    // Included because safeUser reports the cohort, and a row without the
+    // relation would report the student as having no section at all.
+    include: { section: { select: { id: true, name: true } } },
+  });
   if (!student || student.role !== 'student') throw ApiError.notFound('Student not found');
 
   if (req.user.role === 'faculty') {

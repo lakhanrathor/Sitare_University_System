@@ -7,13 +7,13 @@
  * Deliberately the opposite of seed.js: this never deletes anything. It
  * checks for the email first and refuses if the account already exists,
  * so it is safe to run against a database that already holds real people —
- * seed.js's `deleteMany` reset is not, and must never be run there.
+ * seed.js's reset is not, and must never be run there.
  *
  * Usage:
  *   node create-admin.mjs "Full Name" "email@sitare.org" "a-real-password"
  */
-import { connectDB, disconnectDB } from './src/config/db.js';
-import User from './src/models/User.js';
+import { prisma } from './src/config/prisma.js';
+import { hashPassword } from './src/utils/user.js';
 
 const [, , name, emailArg, password] = process.argv;
 
@@ -37,29 +37,34 @@ if (password.length < 6) {
   usageError('Password must be at least 6 characters.');
 }
 
-await connectDB();
-
-const existing = await User.findOne({ email }).select('_id role').lean();
+const existing = await prisma.user.findUnique({
+  where: { email },
+  select: { id: true, role: true },
+});
 if (existing) {
   console.error(
     `[create-admin] ${email} already exists (role: ${existing.role}). Nothing was changed — ` +
       `use the app's own Admin -> People screen to edit an existing account, or pick a different email.`
   );
-  await disconnectDB();
+  await prisma.$disconnect();
   process.exit(1);
 }
 
-const admin = await User.create({
-  name: name.trim(),
-  email,
-  password, // hashed by the User model's pre('save') hook
-  role: 'admin',
-  department: 'Administration',
-  isActive: true,
+const admin = await prisma.user.create({
+  data: {
+    name: name.trim(),
+    email,
+    // Hashed here: the pre-save hook that used to do this went with Mongoose,
+    // and hashPassword is the one place that decides the cost factor.
+    password: await hashPassword(password),
+    role: 'admin',
+    department: 'Administration',
+    isActive: true,
+  },
 });
 
-console.log(`[create-admin] Created admin account: ${admin.email} (id ${admin._id})`);
+console.log(`[create-admin] Created admin account: ${admin.email} (id ${admin.id})`);
 console.log('[create-admin] Sign in with the password you just chose. Nothing else was created or changed.');
 
-await disconnectDB();
+await prisma.$disconnect();
 process.exit(0);

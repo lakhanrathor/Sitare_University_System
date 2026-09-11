@@ -1213,7 +1213,7 @@
         "rollNumber": "2024CS30001",
         "section": {
           "id": "@section:A/sem3",
-          "name": null
+          "name": "A"
         },
         "semester": 3
       },
@@ -1295,7 +1295,7 @@
         "rollNumber": "2024CS30003",
         "section": {
           "id": "@section:A/sem3",
-          "name": null
+          "name": "A"
         },
         "semester": 3
       },

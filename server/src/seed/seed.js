@@ -1,35 +1,30 @@
 /**
- * Resets every collection and creates exactly one admin account — a clean
- * slate for building the ERP up for real, through the app's own Admin UI
- * (Admin -> People, Academics, Manage Timetable), with no synthetic
- * students, faculty, subjects or timetable sitting in the way.
+ * Empties every table and creates exactly one admin account — a clean slate
+ * for building the ERP up for real, through the app's own Admin UI (Admin ->
+ * People, Academics, Manage Timetable), with no synthetic students, faculty,
+ * subjects or timetable sitting in the way.
  *
  * This still fully wipes the database first, which is what makes it a
  * dev/staging tool only — never run this against a database holding real
  * people. Adding an admin to a database that must not be touched otherwise
  * is what create-admin.mjs (in server/) is for.
  *
+ * The index-resetting this used to do is gone, and deliberately so: it existed
+ * because a stale Mongo index from an older schema version would silently
+ * reject valid data long after the script finished. Migrations make an index
+ * a fact about the schema rather than something a seed has to repair.
+ *
  * Run:  npm run seed
  */
-import mongoose from 'mongoose';
+import { prisma } from '../config/prisma.js';
 import { env } from '../config/env.js';
-import User from '../models/User.js';
-import Section from '../models/Section.js';
-import Subject from '../models/Subject.js';
-import Enrollment from '../models/Enrollment.js';
-import ClassSession from '../models/ClassSession.js';
-import Attendance from '../models/Attendance.js';
-import Timetable from '../models/Timetable.js';
-import TimetableEntry from '../models/TimetableEntry.js';
-import ScheduleChange from '../models/ScheduleChange.js';
-import SwapRequest from '../models/SwapRequest.js';
-import Notification from '../models/Notification.js';
+import { hashPassword } from '../utils/user.js';
 
 async function seed() {
   /*
    * A hard stop, not just a warning in the docs — this script wipes every
-   * collection and (re)creates the well-known admin@sitare.org / admin123
-   * account. Written instructions get skipped or mixed up; this cannot be.
+   * table and (re)creates the well-known admin@sitare.org / admin123 account.
+   * Written instructions get skipped or mixed up; this cannot be.
    * NODE_ENV=production is exactly the signal a real deployment sets (see
    * DEPLOYMENT.md), so anyone who points this at production by mistake, or
    * runs it from inside a production shell, is refused outright instead of
@@ -37,7 +32,7 @@ async function seed() {
    */
   if (env.isProd) {
     console.error(
-      '[seed] Refusing to run: NODE_ENV=production. This script wipes every collection and ' +
+      '[seed] Refusing to run: NODE_ENV=production. This script wipes every table and ' +
         'creates a well-known default admin password — never appropriate for a real deployment.\n' +
         '[seed] Use create-admin.mjs instead: it only ever adds one admin, with credentials you ' +
         'choose, and never deletes anything.'
@@ -45,43 +40,43 @@ async function seed() {
     process.exit(1);
   }
 
-  await mongoose.connect(env.mongoUri);
-  console.log(`[seed] Connected to ${mongoose.connection.name}`);
+  console.log(`[seed] Connected to ${env.databaseUrl.replace(/:[^:@/]*@/, ':****@')}`);
 
-  await Promise.all([
-    Attendance.deleteMany({}),
-    ClassSession.deleteMany({}),
-    Enrollment.deleteMany({}),
-    Subject.deleteMany({}),
-    User.deleteMany({}),
-    Section.deleteMany({}),
-    Timetable.deleteMany({}),
-    TimetableEntry.deleteMany({}),
-    ScheduleChange.deleteMany({}),
-    SwapRequest.deleteMany({}),
-    Notification.deleteMany({}),
-  ]);
   /*
-   * Not just cosmetic: a stale index from an older schema version (e.g. a
-   * single-field unique index on Subject.code, from before it became
-   * unique-per-section) would silently reject an admin reusing a course
-   * code across two sections later, through the Admin UI — long after this
-   * script has finished. Resetting indexes here means whatever the admin
-   * builds by hand next matches the current schema, not a leftover one.
+   * Deleted in dependency order rather than left to ON DELETE CASCADE, so this
+   * says out loud what it removes. Attachments before files, because that
+   * foreign key is Restrict: a file row must never be orphaned by something
+   * deleting what referenced it.
    */
-  await Promise.all([
-    Subject.collection.dropIndexes().catch(() => {}),
-    User.collection.dropIndexes().catch(() => {}),
-  ]);
-  await Promise.all([Subject.syncIndexes(), User.syncIndexes()]);
+  await prisma.attendance.deleteMany();
+  await prisma.attendanceDelegation.deleteMany();
+  await prisma.classSession.deleteMany();
+  await prisma.enrollment.deleteMany();
+  await prisma.scheduleChange.deleteMany();
+  await prisma.swapRequest.deleteMany();
+  await prisma.attachment.deleteMany();
+  await prisma.file.deleteMany();
+  await prisma.examPaper.deleteMany();
+  await prisma.examSchedule.deleteMany();
+  await prisma.note.deleteMany();
+  await prisma.leaveDocument.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.timetableEntry.deleteMany();
+  await prisma.timetableSlot.deleteMany();
+  await prisma.timetable.deleteMany();
+  await prisma.subject.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.section.deleteMany();
   console.log('[seed] Cleared existing data');
 
-  const admin = await User.create({
-    name: 'System Admin',
-    email: 'admin@sitare.org',
-    password: 'admin123',
-    role: 'admin',
-    department: 'Administration',
+  const admin = await prisma.user.create({
+    data: {
+      name: 'System Admin',
+      email: 'admin@sitare.org',
+      password: await hashPassword('admin123'),
+      role: 'admin',
+      department: 'Administration',
+    },
   });
 
   console.log('\n──────────────────── LOGIN CREDENTIALS ────────────────────');
@@ -95,12 +90,12 @@ async function seed() {
       '  Admin -> Manage Timetable  (upload/publish a real timetable)\n'
   );
 
-  await mongoose.disconnect();
+  await prisma.$disconnect();
   process.exit(0);
 }
 
 seed().catch(async (err) => {
   console.error('[seed] Failed:', err);
-  await mongoose.disconnect();
+  await prisma.$disconnect();
   process.exit(1);
 });

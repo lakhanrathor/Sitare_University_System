@@ -349,37 +349,46 @@ export const createUser = asyncHandler(async (req, res) => {
   // A sensible default so an admin can add people without inventing passwords.
   const defaults = { student: 'student123', faculty: 'faculty123', admin: 'admin123' };
 
-  const user = await prisma.user.create({
-    data: {
-      ...rest,
-      password: await hashPassword(password || defaults[rest.role]),
-      sectionId: section?.id || null,
-      semester: rest.role === 'student' ? (rest.semester ?? section.semester) : rest.semester,
-    },
-    include: { section: { select: { id: true, name: true } } },
-  });
-
   // New students join every subject their section already runs.
   let enrolled = 0;
-  if (user.role === 'student') {
-    const subjects = await prisma.subject.findMany({
-      where: { sectionId: section.id, isActive: true },
-      select: { id: true },
+  /*
+   * The account and its enrolments in one transaction: a student who exists
+   * but is on no register reads as a working import right up until a lecturer
+   * opens the sheet and finds them missing.
+   */
+  const user = await prisma.$transaction(async (tx) => {
+    const person = await tx.user.create({
+      data: {
+        ...rest,
+        password: await hashPassword(password || defaults[rest.role]),
+        sectionId: section?.id || null,
+        semester: rest.role === 'student' ? (rest.semester ?? section.semester) : rest.semester,
+      },
+      include: { section: { select: { id: true, name: true } } },
     });
-    if (subjects.length) {
-      /*
-       * skipDuplicates rather than a swallowed error: the unordered insertMany
-       * this replaces relied on Mongo continuing past a duplicate key and threw
-       * the failure away, which also threw away every other reason it could
-       * fail. This ignores exactly the one collision that is expected.
-       */
-      await prisma.enrollment.createMany({
-        data: subjects.map((sub) => ({ studentId: user.id, subjectId: sub.id })),
-        skipDuplicates: true,
+
+    if (person.role === 'student') {
+      const subjects = await tx.subject.findMany({
+        where: { sectionId: section.id, isActive: true },
+        select: { id: true },
       });
-      enrolled = subjects.length;
+      if (subjects.length) {
+        /*
+         * skipDuplicates rather than a swallowed error: the unordered
+         * insertMany this replaces relied on Mongo continuing past a duplicate
+         * key and threw the failure away, which also threw away every other
+         * reason it could fail. This ignores exactly the one collision that is
+         * expected.
+         */
+        await tx.enrollment.createMany({
+          data: subjects.map((sub) => ({ studentId: person.id, subjectId: sub.id })),
+          skipDuplicates: true,
+        });
+        enrolled = subjects.length;
+      }
     }
-  }
+    return person;
+  });
 
   await notify([user.id], {
     type: 'account:created',
@@ -649,28 +658,36 @@ export const importStudents = asyncHandler(async (req, res) => {
 
   const created = [];
   for (const r of importable) {
-    const user = await prisma.user.create({
-      data: {
-        name: r.name,
-        email: r.email,
-        password: defaultPassword,
-        role: 'student',
-        rollNumber: r.rollNumber,
-        batch: r.batch || null,
-        semester: Number(semester),
-        sectionId: r.section.id,
-        department: r.section.department,
-      },
+    const subjects = await subjectsFor(r.section.id);
+    /*
+     * Account and enrolments together. A student created but not enrolled is
+     * invisible to every register in their section and looks like a roster
+     * that imported cleanly — the worst kind of failure, because nobody goes
+     * looking for it.
+     */
+    const user = await prisma.$transaction(async (tx) => {
+      const person = await tx.user.create({
+        data: {
+          name: r.name,
+          email: r.email,
+          password: defaultPassword,
+          role: 'student',
+          rollNumber: r.rollNumber,
+          batch: r.batch || null,
+          semester: Number(semester),
+          sectionId: r.section.id,
+          department: r.section.department,
+        },
+      });
+      if (subjects.length) {
+        await tx.enrollment.createMany({
+          data: subjects.map((sub) => ({ studentId: person.id, subjectId: sub.id })),
+          skipDuplicates: true,
+        });
+      }
+      return person;
     });
     created.push(user);
-
-    const subjects = await subjectsFor(r.section.id);
-    if (subjects.length) {
-      await prisma.enrollment.createMany({
-        data: subjects.map((sub) => ({ studentId: user.id, subjectId: sub.id })),
-        skipDuplicates: true,
-      });
-    }
   }
 
   res.status(201).json({
