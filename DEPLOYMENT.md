@@ -54,6 +54,51 @@ and Socket.io), `GOOGLE_CLIENT_ID`.
 **Client service**: `VITE_API_URL` (the API service's URL — see below),
 `VITE_GOOGLE_CLIENT_ID`.
 
+### Moving an existing service from MongoDB to PostgreSQL
+
+Swapping `DATABASE_URL` in for `MONGO_URI` is not sufficient on its own — two
+other things have to be true first, and both are easy to miss because the
+service still starts and still answers `/api/health` without them.
+
+**Create the database.** Render Dashboard → New → Postgres.
+
+- **Version 16** (15 or newer is required: the schema uses `NULLS NOT DISTINCT`,
+  and two unique indexes silently stop enforcing anything without it).
+- **Same region as the API service.** They talk on every request; putting them
+  in different regions means every query crosses the internet.
+- Free instances are deleted about a month after creation, and everything in
+  them goes too. Fine for staging, whose data is synthetic and re-creatable.
+  Production needs a paid instance with backups on.
+
+**Point the API at it.** In the API service → Environment:
+
+- add `DATABASE_URL`, set to the database's **Internal** connection string —
+  internal keeps the traffic inside Render's network and needs no public access
+- delete `MONGO_URI`; nothing reads it, and a stale credential in an
+  environment panel is still a credential
+
+**Set the build command** to `npm install && npm run build`.
+
+This is the step that is easy to skip and expensive to skip. `npm run build`
+runs `prisma generate` (without it `@prisma/client` throws on the first query)
+and then `prisma migrate deploy`, which creates the schema. Miss it and the
+service deploys, reports healthy, and fails every real request — which reads as
+the application being broken rather than the database being empty. Running it
+in the build also means a failed migration fails the build, and the previous
+version keeps serving.
+
+`prisma` is a runtime dependency rather than a dev one for the same reason:
+`NODE_ENV=production` makes `npm install` skip devDependencies, so the CLI has
+to be somewhere that survives that.
+
+**Then merge to the branch the service tracks** and let it deploy.
+
+**Create the first admin.** The new database is empty and nobody can sign in
+until one account exists — see *Bootstrapping the first admin* below.
+
+A deploy is a git push from then on: the build command reapplies any new
+migrations before the new code serves its first request.
+
 ### The client static site needs one rewrite rule
 
 React Router only ever handles a route like `/admin/people` once `index.html` and
@@ -157,16 +202,37 @@ Handoff mechanics that make this actually true, not just a policy:
 - On handoff, rotate the production DB password and `JWT_SECRET`. Anything the
   developer may have seen during earlier testing stops working immediately.
 
-### Bootstrapping the first production admin
+### Bootstrapping the first admin
 
-A freshly created production database has zero users, and every account in this
-app is normally created by an existing admin through Admin → People — so nobody
-can log in at all until one admin exists. Whoever holds production runs, once:
+A freshly created database has zero users, and every account in this app is
+normally created by an existing admin through Admin → People — so nobody can
+sign in at all until one account exists. Whoever holds that environment runs it
+once, from `server/`:
 
 ```bash
-DATABASE_URL="the-production-connection-string" npx prisma migrate deploy
-DATABASE_URL="the-production-connection-string" node create-admin.mjs "Real Name" "real-email@sitare.org" "a-real-password-they-choose"
+node create-admin.mjs "Real Name" "real-email@sitare.org" "a-password-they-choose"
 ```
+
+The schema is already there: the service's build command ran `prisma migrate
+deploy` on its way up.
+
+Where to run it matters more than it looks. If the service's plan has a **Shell**
+tab, run it there — the service already holds `DATABASE_URL` in its environment,
+so the command above works unchanged and the credential never leaves Render.
+That is the right way to do it for production, because nobody has to hold a copy
+locally or paste one anywhere it might be remembered.
+
+Without a Shell, it has to be run locally with the database's **External**
+connection string in front of it:
+
+```bash
+DATABASE_URL="the-external-connection-string" node create-admin.mjs "Real Name" "real-email@sitare.org" "a-password"
+```
+
+For staging that is unremarkable — it is your own database of synthetic data.
+For production it means somebody has handled the production credential, so it
+should be whoever owns production, never the developer, and the password should
+be rotated afterwards if there is any doubt about where it has been.
 
 This is the only sanctioned way to get a first admin into production. It never
 deletes anything and refuses if the email already exists, so it's safe even if
