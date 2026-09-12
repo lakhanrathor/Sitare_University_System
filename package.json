@@ -9,6 +9,7 @@
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
     "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/free-ports.ps1",
+    "restart": "npm run stop && npm run dev",
     "start": "npm --prefix server run start",
     "build": "npm --prefix client run build",
     "setup": "npm install && npm --prefix server install && npm --prefix client install",

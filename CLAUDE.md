@@ -78,7 +78,15 @@ Open <http://localhost:5173>. Vite proxies `/api` and `/socket.io` to the API.
   editing, but a request that lands mid-restart gets no response. `npm run use` runs the API
   without `--watch` for a stable session (e.g. a live demo); the client's fetch wrapper also
   retries automatically on that specific failure signature either way.
-- `npm run stop` frees ports 5000/5173 if a previous run didn't shut down cleanly.
+- `npm run stop` frees ports 5000/5173 if a previous run didn't shut down cleanly, and
+  `npm run restart` is that followed by `npm run dev` — the usual answer to a dev server
+  that has got itself wedged.
+- PostgreSQL is expected to be running before any of this. On Windows, register it once as a
+  service rather than starting it by hand (`pg_ctl register -N postgresql-17 -D <data dir>
+  -o "-p 5433" -S auto`, from an elevated shell) so it comes back after a reboot. Starting a
+  second instance with `pg_ctl` while the service holds the data directory is the one way to
+  break it: the service then refuses to start, and Windows reports only "The service did not
+  report an error".
 - `npm run seed` (`server/src/seed/seed.js`) empties every table and creates exactly one
   account: `admin@sitare.org` / `admin123`. Everything else — sections, faculty, students,
   subjects, the timetable — starts empty on purpose, so the real workflow (log in as admin,
