@@ -714,8 +714,8 @@ function ImportStudentsModal({ open, onClose, sections, onDone }) {
           label="Student list PDF or CSV"
           hint={
             sectionId
-              ? 'Only needs three columns: rollNumber, name, email. Anything else in the file is ignored.'
-              : 'Needs columns: rollNumber, name, email and section. Anything else is ignored.'
+              ? 'Needs a roll number, a name and an email. Column headings are matched loosely — "Roll No.", "Student Name" and "Email ID" are all understood — and any other column is ignored.'
+              : 'Needs a roll number, a name, an email and a section. Column headings are matched loosely — "Roll No.", "Student Name" and "Email ID" are all understood — and any other column is ignored.'
           }
         >
           <div className="flex flex-wrap items-center gap-3">

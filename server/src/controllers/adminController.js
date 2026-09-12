@@ -4,7 +4,7 @@ import { sectionLabel } from '../utils/section.js';
 import ApiError from '../utils/ApiError.js';
 import { getOverallForStudents, getStudentSummary } from '../services/attendanceService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { parseCSVToObjects } from '../utils/csv.js';
+import { parseCSVToObjects, STUDENT_COLUMNS } from '../utils/csv.js';
 import { parseStudentsPDF } from '../services/pdfParser.js';
 import { todayKey, addDays } from '../utils/date.js';
 import { idOf, sameId } from '../utils/ids.js';
@@ -505,7 +505,7 @@ export const importStudents = asyncHandler(async (req, res) => {
     const isCsv =
       /csv/i.test(req.file.mimetype) || req.file.originalname.toLowerCase().endsWith('.csv');
     if (isCsv) {
-      ({ records } = parseCSVToObjects(req.file.buffer.toString('utf-8')));
+      ({ records } = parseCSVToObjects(req.file.buffer.toString('utf-8'), STUDENT_COLUMNS));
       source = 'csv';
     } else {
       try {
@@ -516,7 +516,7 @@ export const importStudents = asyncHandler(async (req, res) => {
       }
     }
   } else if (req.body?.csv?.trim()) {
-    ({ records } = parseCSVToObjects(req.body.csv));
+    ({ records } = parseCSVToObjects(req.body.csv, STUDENT_COLUMNS));
     source = 'csv';
   } else {
     throw ApiError.badRequest('Attach a student list PDF or CSV, or paste the rows');

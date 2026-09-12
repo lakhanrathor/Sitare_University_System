@@ -3,7 +3,7 @@ import { prisma } from '../config/prisma.js';
 import { ENTRY_KINDS } from '../config/slots.js';
 import ApiError from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { parseCSVToObjects, toCSV } from '../utils/csv.js';
+import { parseCSVToObjects, toCSV, TIMETABLE_COLUMNS } from '../utils/csv.js';
 import { parseTimetablePDF } from '../services/pdfParser.js';
 import { todayKey, toUTCDate } from '../utils/date.js';
 import { idOf, sameId } from '../utils/ids.js';
@@ -692,7 +692,7 @@ async function readUpload(req, semester) {
   }
 
   if (req.body?.csv?.trim()) {
-    const { records } = parseCSVToObjects(req.body.csv);
+    const { records } = parseCSVToObjects(req.body.csv, TIMETABLE_COLUMNS);
     return { records, source: 'csv', layout: 'list', periods: null, lunch: null, legend: [] };
   }
 
