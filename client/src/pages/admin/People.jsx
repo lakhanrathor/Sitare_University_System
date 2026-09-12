@@ -220,7 +220,20 @@ export default function People() {
           {TABS.map((t) => (
             <button
               key={t.key}
-              onClick={() => setTab(t.key)}
+              onClick={() => {
+                if (t.key === tab) return;
+                /*
+                 * Cleared together with the tab, because changing the tab
+                 * changes which columns are drawn and React renders that
+                 * before the effect below can fetch. Without this, one frame
+                 * shows the previous tab's rows under the new tab's columns —
+                 * faculty in the students table, with no roll number, no
+                 * section and no attendance.
+                 */
+                setUsers([]);
+                setLoading(true);
+                setTab(t.key);
+              }}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
                 tab === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
@@ -380,7 +393,13 @@ export default function People() {
                       )}
                       {tab === 'student' && (
                         <td className="px-4 py-3">
-                          {u.attendance?.percentage === null || u.attendance === null ? (
+                          {/*
+                            `== null` on purpose: attendance is absent entirely
+                            on a row that was not asked for it, and `undefined`
+                            is not `null`. Testing only for null sent those rows
+                            into the branch below, which reads through it.
+                          */}
+                          {u.attendance?.percentage == null ? (
                             <span className="text-xs text-slate-400">No classes yet</span>
                           ) : (
                             <span
