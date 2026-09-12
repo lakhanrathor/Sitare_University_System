@@ -79,13 +79,26 @@ service still starts and still answers `/api/health` without them.
 
 **Set the build command** to `npm install && npm run build`.
 
-This is the step that is easy to skip and expensive to skip. `npm run build`
-runs `prisma generate` (without it `@prisma/client` throws on the first query)
-and then `prisma migrate deploy`, which creates the schema. Miss it and the
-service deploys, reports healthy, and fails every real request — which reads as
-the application being broken rather than the database being empty. Running it
-in the build also means a failed migration fails the build, and the previous
-version keeps serving.
+`npm run build` runs `prisma generate`. Without it `@prisma/client` throws on
+the first query, because the generated client is not in the repository.
+
+**Migrations run at start, not at build**, and that split is deliberate. A
+build runs in its own environment, which is not attached to the private network
+the internal database URL resolves on — `prisma migrate deploy` in a build
+command fails with `P1001: Can't reach database server at dpg-xxxx-a:5432` even
+though the database is running perfectly. The start command runs in the
+service's own environment, where that hostname resolves, so `npm start` is
+`prisma migrate deploy && node src/server.js`.
+
+The consequence worth knowing: a failed migration means the service fails to
+start rather than failing to build. Render keeps the previous version serving
+either way, so nothing half-migrated takes traffic — but the error appears in
+the service log, not the build log. Look there first when a deploy goes quiet.
+
+Migrations re-run on every restart, including when a free instance wakes from
+sleep. That is safe: `migrate deploy` applies only what has not been applied,
+takes an advisory lock so two instances starting together cannot collide, and
+costs one round trip when there is nothing to do.
 
 `prisma` is a runtime dependency rather than a dev one for the same reason:
 `NODE_ENV=production` makes `npm install` skip devDependencies, so the CLI has

@@ -6,12 +6,12 @@
   "description": "Sitare University ERP - API server (Attendance Module)",
   "main": "src/server.js",
   "engines": {
-    "node": ">=18"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
-    "build": "prisma generate && prisma migrate deploy",
+    "start": "prisma migrate deploy && node src/server.js",
+    "build": "prisma generate",
     "seed": "node src/seed/seed.js",
     "seed:demo": "node src/seed/fixture.js",
     "security-check": "node security-check.mjs",
