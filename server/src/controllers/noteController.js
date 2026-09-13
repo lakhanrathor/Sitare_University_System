@@ -74,29 +74,21 @@ async function scopeFor(user, query) {
     };
   }
 
-  if (user.role === 'faculty') {
-    const taught = await prisma.subject.findMany({
-      where: { facultyId: idOf(user), isActive: true },
-      select: { semester: true, sectionId: true },
-    });
-
-    // A cohort they teach: their own semester, and — when they teach one
-    // specific section — either that section's notes or ones addressed to
-    // the whole year. Teaching a whole undivided year opens every section's
-    // notes in that semester, since there is nothing narrower to teach.
-    const cohortClauses = taught.map((s) =>
-      s.sectionId
-        ? { semester: s.semester, OR: [{ sectionId: s.sectionId }, { sectionId: null }] }
-        : { semester: s.semester }
-    );
-
-    if (!cohortClauses.length) {
-      // Teaches nothing yet: their own uploads are the only thing to show.
-      return { uploadedById: idOf(user) };
-    }
-
-    return { OR: [{ uploadedById: idOf(user) }, ...cohortClauses] };
-  }
+  /*
+   * A lecturer sees what they published, and nothing else.
+   *
+   * It used to be their own uploads *plus* every note addressed to a cohort
+   * they teach, which meant a shared year put each teacher's material in front
+   * of all the others. Notes are written for a class, not for the staff room:
+   * someone's working draft, their phrasing, the order they choose to teach
+   * something in. A colleague reading it changes what people are willing to
+   * put up, and no part of this system needs them to.
+   *
+   * Administrators keep the full list below — somebody has to be able to
+   * answer "what has been given to this year", and to remove what should not
+   * be there.
+   */
+  if (user.role === 'faculty') return { uploadedById: idOf(user) };
 
   const where = {};
   if (query.semester) where.semester = Number(query.semester);
@@ -252,19 +244,9 @@ async function loadVisible(user, noteId) {
     if (!sameYear || !forThem) throw ApiError.forbidden('Those notes are not for your class');
   }
 
+  // Mirrors scopeFor: a lecturer's own uploads, and nothing a colleague filed.
   if (user.role === 'faculty' && !sameId(note.uploadedById, user)) {
-    const taught = await prisma.subject.findMany({
-      where: { facultyId: idOf(user), isActive: true },
-      select: { semester: true, sectionId: true },
-    });
-    const coversCohort = taught.some(
-      (s) =>
-        s.semester === note.semester &&
-        // Teaching the whole undivided year opens every section in it; teaching
-        // one section opens that section's notes plus whole-year ones.
-        (!s.sectionId || !note.sectionId || sameId(s.sectionId, note.sectionId))
-    );
-    if (!coversCohort) throw ApiError.forbidden('Those notes are not for a class you teach');
+    throw ApiError.forbidden('Those notes were published by someone else');
   }
   return note;
 }

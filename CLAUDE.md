@@ -186,8 +186,11 @@ exam sheet here is published as one document listing every year's papers. A CHEC
 such a schedule carries no section — a section belongs to exactly one year, so "every year" and
 "one cohort" cannot both be true, and a whole-college sheet pinned to a section would be invisible
 to everyone it was meant for.
-Faculty only see notes for cohorts they actually teach, plus their own uploads — not every
-faculty member's material. Students only see their own semester + section.
+**A lecturer sees only the notes they published themselves** — not a colleague's, even for a
+cohort they both teach. Notes are written for a class, not for the staff room, and a teacher
+reading another's material changes what people are willing to put up. Admins keep the full list,
+because somebody has to be able to answer "what has this year been given" and to take down what
+should not be there. Students only see their own semester + section.
 
 **Deactivate, don't delete.** Attendance records reference people and subjects, so removing
 them would tear holes in past registers. Faculty, students, subjects with recorded history, and

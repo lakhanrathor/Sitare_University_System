@@ -51,8 +51,18 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
     () => subjects.filter((s) => !semester || String(s.semester) === String(semester)),
     [subjects, semester]
   );
+  /*
+   * Named sections only. A year that was never divided still has a section row
+   * behind it, with an empty name — offering it as "The whole batch" beside
+   * "Everyone in the semester" is two options for one audience, and a lecturer
+   * teaching two undivided years saw it listed twice with nothing to tell the
+   * entries apart.
+   */
   const sectionsHere = useMemo(
-    () => sections.filter((s) => !semester || String(s.semester) === String(semester)),
+    () =>
+      sections.filter(
+        (s) => s.name && (!semester || String(s.semester) === String(semester))
+      ),
     [sections, semester]
   );
 
@@ -73,7 +83,8 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
     const hit = subjects.find((s) => s.id === id);
     if (hit) {
       setSemester(String(hit.semester));
-      if (hit.section?.id) setSectionId(hit.section.id);
+      // Only when it is a real, named section; see sectionsHere above.
+      setSectionId(hit.section?.id && hit.section.name ? hit.section.id : '');
     }
   };
 
@@ -324,15 +335,18 @@ export default function Notes() {
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-1.5 text-xs text-slate-600">
-            <input
-              type="checkbox"
-              checked={mineOnly}
-              onChange={(e) => setMineOnly(e.target.checked)}
-              className="rounded border-slate-300"
-            />
-            Only mine
-          </label>
+          {/* Only an admin sees anyone else's, so only an admin can narrow. */}
+          {user?.role === 'admin' && (
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={mineOnly}
+                onChange={(e) => setMineOnly(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              Only mine
+            </label>
+          )}
         </div>
       )}
 
