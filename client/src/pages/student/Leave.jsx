@@ -203,6 +203,8 @@ export default function StudentLeave() {
   return (
     <div className="animate-fade-up">
       <PageHeader
+        icon={CalendarRange}
+        tone="emerald"
         title="Leave applications"
         subtitle={
           docs.length

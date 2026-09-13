@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 import { sectionLabel, sectionShort } from '../../lib/format';
 import { useToast } from '../../context/ToastContext';
 import {
-  Card, PageHeader, Spinner, Button, Field, Input, Select, Modal,
+  Card, PageHeader, SectionTitle, Spinner, Button, Field, Input, Select, Modal,
   EmptyState, ErrorNote, InfoNote,
 } from '../../components/ui';
 
@@ -180,6 +180,8 @@ export default function Academics() {
   return (
     <div className="animate-fade-up">
       <PageHeader
+        icon={Layers}
+        tone="accent"
         title="Academics"
         subtitle="Sections, subjects, lecturers and enrolment"
         actions={
@@ -213,10 +215,7 @@ export default function Academics() {
       {error && <ErrorNote>{error}</ErrorNote>}
 
       {/* Sections */}
-      <div className="mb-3 flex items-center gap-2">
-        <Layers className="h-4 w-4 text-slate-400" />
-        <h2 className="text-base font-semibold text-slate-900">Sections</h2>
-      </div>
+      <SectionTitle>Sections</SectionTitle>
 
       <Card className="mb-6 overflow-hidden">
         {sections.length === 0 ? (
@@ -228,12 +227,12 @@ export default function Academics() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {sections.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-600">
+              <li key={s.id} className="flex flex-wrap items-center gap-3 px-4 py-3 transition hover:bg-slate-50/70 sm:px-5">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-sm font-bold text-white shadow-sm shadow-indigo-600/25">
                   {sectionShort(s)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-900">
+                  <p className="text-sm font-semibold text-slate-900">
                     Semester {s.semester} · {sectionLabel(s)}
                   </p>
                   <p className="nums text-xs text-slate-500">
@@ -276,13 +275,10 @@ export default function Academics() {
       </Card>
 
       {/* Subjects */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-slate-400" />
-          <h2 className="text-base font-semibold text-slate-900">Subjects</h2>
-        </div>
-        {/* Wrapped: Select is w-full by design, so the width is set here. */}
-        <div className="w-44">
+      <SectionTitle
+        action={
+          /* Wrapped: Select is w-full by design, so the width is set here. */
+          <div className="w-44">
           <Select value={semester} onChange={(e) => setSemester(e.target.value)} className="h-9">
             <option value="">All semesters</option>
             {semesters.map((s) => (
@@ -291,8 +287,11 @@ export default function Academics() {
               </option>
             ))}
           </Select>
-        </div>
-      </div>
+          </div>
+        }
+      >
+        Subjects
+      </SectionTitle>
 
       <Card className="overflow-hidden">
         {subjects.length === 0 ? (
@@ -305,7 +304,7 @@ export default function Academics() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
+                <tr className="border-b border-slate-200/70 bg-slate-50/80 text-left text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                   <th className="px-4 py-2.5 sm:px-5">Code</th>
                   <th className="px-4 py-2.5">Subject</th>
                   <th className="px-4 py-2.5">Section</th>
@@ -319,7 +318,7 @@ export default function Academics() {
                 {subjects.map((s) => (
                   <tr key={s.id} className={`transition hover:bg-slate-50 ${s.isActive ? '' : 'opacity-60'}`}>
                     <td className="px-4 py-3 sm:px-5">
-                      <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-600">
+                      <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-indigo-700">
                         {s.code}
                       </span>
                     </td>

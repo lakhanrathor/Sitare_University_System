@@ -4,7 +4,7 @@ import { ClipboardCheck, BarChart3, Users, CalendarDays } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useSocketEvent } from '../../context/SocketContext';
-import { Card, PageHeader, Spinner, EmptyState, ErrorNote, Button } from '../../components/ui';
+import { Card, HeroPanel, Spinner, EmptyState, ErrorNote, Button } from '../../components/ui';
 import { firstName, formatDate } from '../../lib/format';
 
 function SubjectCard({ s }) {
@@ -157,7 +157,7 @@ export default function FacultyDashboard() {
 
   return (
     <div className="animate-fade-up">
-      <PageHeader
+      <HeroPanel
         title={user?.role === 'admin' ? 'All subjects' : `Hello, ${firstName(user?.name)}`}
         subtitle={
           subjects.length

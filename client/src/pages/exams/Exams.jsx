@@ -323,6 +323,13 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
 /* Reading                                                             */
 /* ------------------------------------------------------------------ */
 
+/* The calendar-leaf tile wants the month on its own, which formatDate — which
+   always leads with the weekday — cannot give it. */
+function monthShort(dateKey) {
+  if (!dateKey) return '';
+  return new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-IN', { month: 'short' });
+}
+
 export default function Exams() {
   const { user } = useAuth();
   const { notify } = useToast();
@@ -398,6 +405,8 @@ export default function Exams() {
   return (
     <div className="animate-fade-up">
       <PageHeader
+        icon={CalendarClock}
+        tone="accent"
         title="Exams"
         subtitle={
           isStaff
@@ -418,21 +427,49 @@ export default function Exams() {
 
       {/* A student's next paper, before anything else on the page. */}
       {!isStaff && nextPaper && (
-        <Card className="mb-4 border-indigo-200 bg-indigo-50/60 p-5">
-          <p className="text-xs font-medium tracking-wide text-indigo-700 uppercase">
-            Your next paper
-          </p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            {nextPaper.subject ? `${nextPaper.subject.code} — ${nextPaper.subject.name}` : nextPaper.label}
-          </p>
-          <p className="mt-0.5 text-sm text-slate-700">
-            {formatDate(nextPaper.dateKey, true)}
-            {countdown(nextPaper.dateKey) ? ` · ${countdown(nextPaper.dateKey)}` : ''}
-            {nextPaper.startTime ? ` · ${nextPaper.startTime}` : ''}
-            {nextPaper.endTime ? `–${nextPaper.endTime}` : ''}
-            {nextPaper.room ? ` · ${nextPaper.room}` : ''}
-          </p>
-        </Card>
+        <div className="elev-2 relative mb-5 overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 to-indigo-800 p-5 text-white sm:p-6">
+          <div
+            className="pointer-events-none absolute -top-16 -right-10 h-44 w-44 rounded-full bg-accent-400/25 blur-3xl"
+            aria-hidden="true"
+          />
+          <div className="relative flex items-center gap-4">
+            {/* The date as a tear-off calendar leaf — the number is the thing
+                being looked for, so it gets read before any of the prose. */}
+            <div className="grid h-16 w-16 shrink-0 place-content-center rounded-2xl bg-white/15 text-center backdrop-blur">
+              <span className="block text-[11px] font-semibold tracking-wider text-indigo-100 uppercase">
+                {monthShort(nextPaper.dateKey)}
+              </span>
+              <span className="nums block text-2xl leading-none font-bold">
+                {nextPaper.dateKey.slice(8, 10)}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold tracking-wider text-indigo-200 uppercase">
+                Your next paper
+              </p>
+              <p className="mt-0.5 truncate text-lg font-bold">
+                {nextPaper.subject
+                  ? `${nextPaper.subject.code} — ${nextPaper.subject.name}`
+                  : nextPaper.label}
+              </p>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-indigo-100/90">
+                <span>{formatDate(nextPaper.dateKey, true)}</span>
+                {countdown(nextPaper.dateKey) && (
+                  <span className="rounded-full bg-accent-500 px-2 py-0.5 text-xs font-bold text-white">
+                    {countdown(nextPaper.dateKey)}
+                  </span>
+                )}
+                {nextPaper.startTime && (
+                  <span>
+                    {nextPaper.startTime}
+                    {nextPaper.endTime ? `–${nextPaper.endTime}` : ''}
+                  </span>
+                )}
+                {nextPaper.room && <span>· {nextPaper.room}</span>}
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {isStaff && semesters.length > 0 && (
@@ -440,7 +477,7 @@ export default function Exams() {
           <select
             value={semesterFilter}
             onChange={(e) => setSemesterFilter(e.target.value)}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none"
+            className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-700 elev-1 transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-none"
           >
             <option value="">All semesters</option>
             {semesters.map((s) => (
@@ -475,14 +512,18 @@ export default function Exams() {
       ) : (
         <div className="space-y-4">
           {exams.map((e) => (
-            <Card key={e.id} className="p-5">
+            <Card key={e.id} className="p-5 transition hover:-translate-y-0.5 hover:elev-2">
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
+                <div className="flex min-w-0 gap-3.5">
+                  <span className="hidden h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-accent-50 to-accent-100 text-accent-600 sm:grid">
+                    <CalendarClock className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 capitalize">
+                    <span className="rounded-md bg-accent-50 px-1.5 py-0.5 text-[11px] font-bold text-accent-700 capitalize">
                       {e.examType.replace('-', ' ')}
                     </span>
-                    <h2 className="text-sm font-semibold text-slate-900">{e.title}</h2>
+                    <h2 className="text-[15px] font-bold text-slate-900">{e.title}</h2>
                     {isStaff && (
                       <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700">
                         Sem {e.semester} · {sectionLabel(e.section)}
@@ -495,6 +536,7 @@ export default function Exams() {
                       : 'Dates on the attached sheet'}
                     {e.publishedBy?.name ? ` · published by ${e.publishedBy.name}` : ''}
                   </p>
+                  </div>
                 </div>
                 {isAdmin && (
                   <Button variant="ghost" size="sm" onClick={() => remove(e)} title="Remove">
@@ -513,7 +555,7 @@ export default function Exams() {
                 <div className="mt-3 overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 text-left text-xs font-medium text-slate-500">
+                      <tr className="border-b border-slate-200/70 text-left text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                         <th className="py-2 pr-3">Paper</th>
                         <th className="py-2 pr-3">Date</th>
                         <th className="py-2 pr-3">Time</th>

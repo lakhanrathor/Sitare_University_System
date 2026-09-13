@@ -15,7 +15,6 @@ import { useToast } from '../../context/ToastContext';
 import { formatPct, styleFor, sectionLabel, formatDate } from '../../lib/format';
 import {
   Card,
-  PageHeader,
   Spinner,
   EmptyState,
   ErrorNote,
@@ -36,6 +35,23 @@ function leavePeriod(d) {
     return `${formatDate(d.leaveFrom)} – ${formatDate(d.leaveTo, true)}`;
   }
   return formatDate(d.leaveFrom || d.leaveTo, true);
+}
+
+const TINT = {
+  good: 'from-emerald-50',
+  warning: 'from-amber-50',
+  critical: 'from-rose-50',
+  'no-data': 'from-slate-50',
+};
+
+function initials(name = '') {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
 }
 
 export default function StudentProfile() {
@@ -101,20 +117,33 @@ export default function StudentProfile() {
         Back to people
       </Link>
 
-      <PageHeader
-        title={student.name}
-        subtitle={`${student.rollNumber || '—'} · ${student.email} · Semester ${
-          student.semester ?? '—'
-        } · ${sectionLabel(student.section)}`}
-      />
+      <Card className="mb-5 flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-lg font-bold text-white shadow-md shadow-indigo-600/25">
+          {initials(student.name)}
+        </span>
+        <div className="min-w-0">
+          <h1 className="truncate text-[22px] font-bold tracking-tight text-slate-900">
+            {student.name}
+          </h1>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+            <span className="nums rounded-md bg-slate-100 px-2 py-0.5 font-mono font-semibold text-slate-600">
+              {student.rollNumber || '—'}
+            </span>
+            <span className="rounded-md bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700">
+              Semester {student.semester ?? '—'} · {sectionLabel(student.section)}
+            </span>
+            <span className="truncate text-slate-500">{student.email}</span>
+          </div>
+        </div>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Attendance, so the decision and the evidence sit on one screen. */}
-        <Card className="p-5">
-          <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+        <Card className={`bg-gradient-to-b to-white p-5 ${TINT[overall.status] || TINT['no-data']}`}>
+          <p className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
             Overall attendance
           </p>
-          <p className={`nums mt-1 text-3xl font-semibold ${s.text}`}>
+          <p className={`nums mt-1 text-4xl font-bold ${s.text}`}>
             {formatPct(overall.percentage)}
             {overall.percentage !== null && <span className="text-lg">%</span>}
           </p>
@@ -131,7 +160,7 @@ export default function StudentProfile() {
         </Card>
 
         <Card className="p-5 lg:col-span-2">
-          <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">By subject</p>
+          <p className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">By subject</p>
           <ul className="mt-2 divide-y divide-slate-100">
             {subjects.map((sub) => {
               const st = styleFor(sub.status);
@@ -162,8 +191,8 @@ export default function StudentProfile() {
       <Card className="mt-4">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
           <div className="flex items-center gap-2">
-            <Inbox className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-900">Leave applications</h2>
+            <Inbox className="h-4 w-4 text-indigo-400" />
+            <h2 className="text-sm font-bold text-slate-900">Leave applications</h2>
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
               {docs.length}
             </span>

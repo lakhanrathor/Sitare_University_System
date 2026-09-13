@@ -7,7 +7,9 @@ import { useSocketEvent } from '../../context/SocketContext';
 import { useToast } from '../../context/ToastContext';
 import { formatPct, styleFor, classesNeeded, classesCanMiss } from '../../lib/format';
 import AttendanceRing from '../../components/AttendanceRing';
-import { Card, PageHeader, Spinner, Badge, EmptyState, ErrorNote } from '../../components/ui';
+import {
+  Card, HeroPanel, SectionTitle, Spinner, Badge, EmptyState, ErrorNote,
+} from '../../components/ui';
 
 function StatTile({ icon: Icon, label, value, hint, tone = 'slate' }) {
   const tones = {
@@ -126,7 +128,7 @@ export default function StudentDashboard() {
 
   return (
     <div className="animate-fade-up">
-      <PageHeader
+      <HeroPanel
         title={`Hello, ${user?.name?.split(' ')[0]}`}
         subtitle={[
           user?.rollNumber,
@@ -155,7 +157,7 @@ export default function StudentDashboard() {
           </div>
 
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold text-slate-900">Overall attendance</h2>
+            <h2 className="text-base font-bold text-slate-900">Overall attendance</h2>
             <p className="mt-1 text-sm text-slate-500">
               {started ? (
                 <>
@@ -239,10 +241,9 @@ export default function StudentDashboard() {
       </Card>
 
       {/* Subject-wise */}
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-base font-semibold text-slate-900">Subject-wise attendance</h2>
-        <span className="text-xs text-slate-500">{subjects.length} subjects</span>
-      </div>
+      <SectionTitle action={<span className="text-xs text-slate-500">{subjects.length} subjects</span>}>
+        Subject-wise attendance
+      </SectionTitle>
 
       <Card className="overflow-hidden">
         {subjects.length === 0 ? (

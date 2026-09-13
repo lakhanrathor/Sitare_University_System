@@ -196,6 +196,8 @@ export default function People() {
   return (
     <div className="animate-fade-up">
       <PageHeader
+        icon={Users}
+        tone="indigo"
         title="People"
         subtitle="Everyone added or imported here can sign in straight away — students with student123, faculty with faculty123, until they change it"
         actions={
@@ -216,7 +218,7 @@ export default function People() {
 
       {/* Tabs + filters */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+        <div className="elev-1 flex gap-1 rounded-xl border border-slate-200/70 bg-white p-1">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -234,8 +236,10 @@ export default function People() {
                 setLoading(true);
                 setTab(t.key);
               }}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                tab === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                tab === t.key
+                  ? 'bg-gradient-to-b from-indigo-500 to-indigo-600 text-white shadow-sm shadow-indigo-600/25'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
               }`}
             >
               <t.icon className="h-3.5 w-3.5" />
@@ -255,7 +259,7 @@ export default function People() {
                   // A section belongs to one year, so it cannot survive the change.
                   setSectionFilter('');
                 }}
-                className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none"
+                className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-700 elev-1 transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-none"
               >
                 <option value="">All semesters</option>
                 {semesters.map((s) => (
@@ -269,7 +273,7 @@ export default function People() {
                 <select
                   value={sectionFilter}
                   onChange={(e) => setSectionFilter(e.target.value)}
-                  className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none"
+                  className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-700 elev-1 transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-none"
                 >
                   <option value="">All sections</option>
                   {sectionsForFilter.map((s) => (
@@ -351,7 +355,7 @@ export default function People() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
+                  <tr className="border-b border-slate-200/70 bg-slate-50/80 text-left text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                     <th className="px-4 py-2.5 sm:px-5">{tab === 'student' ? 'Roll no.' : 'ID'}</th>
                     <th className="px-4 py-2.5">Name</th>
                     <th className="px-4 py-2.5">Email</th>

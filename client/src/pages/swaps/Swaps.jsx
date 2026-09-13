@@ -6,7 +6,9 @@ import { useToast } from '../../context/ToastContext';
 import { useSocketEvent } from '../../context/SocketContext';
 import { shortDate } from '../../lib/timetable';
 import { sectionLabel } from '../../lib/format';
-import { Card, PageHeader, Spinner, Button, EmptyState, ErrorNote, Textarea } from '../../components/ui';
+import {
+  Card, PageHeader, SectionTitle, Spinner, Button, EmptyState, ErrorNote, Textarea,
+} from '../../components/ui';
 
 const STATUS_STYLE = {
   pending: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -93,12 +95,19 @@ export default function Swaps() {
   const settled = swaps.filter((s) => !['pending', 'accepted'].includes(s.status));
 
   const renderCard = (s) => (
-    <Card key={s.id} className="p-4">
+    <Card
+      key={s.id}
+      className={`p-4 transition hover:elev-2 ${
+        ['pending', 'accepted'].includes(s.status)
+          ? 'border-l-4 border-l-accent-400'
+          : 'border-l-4 border-l-transparent'
+      }`}
+    >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium text-slate-900">{s.requestedBy.name}</span>
-          <ArrowLeftRight className="h-3.5 w-3.5 text-slate-400" />
-          <span className="font-medium text-slate-900">{s.counterparty.name}</span>
+          <span className="font-semibold text-slate-900">{s.requestedBy.name}</span>
+          <ArrowLeftRight className="h-3.5 w-3.5 text-indigo-400" />
+          <span className="font-semibold text-slate-900">{s.counterparty.name}</span>
         </div>
         <span
           className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
@@ -112,7 +121,7 @@ export default function Swaps() {
       <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
         <Side side={s.from} who="Requester's class" tone="border-slate-200 bg-white" />
         <div className="grid shrink-0 place-items-center">
-          <span className="grid h-7 w-7 place-items-center rounded-full bg-violet-100 text-violet-700">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-sm shadow-indigo-600/25">
             <Repeat className="h-3.5 w-3.5" />
           </span>
         </div>
@@ -229,6 +238,8 @@ export default function Swaps() {
   return (
     <div className="animate-fade-up">
       <PageHeader
+        icon={Repeat}
+        tone="sky"
         title="Class swaps"
         subtitle={
           user?.role === 'admin'
@@ -249,18 +260,18 @@ export default function Swaps() {
         <div className="space-y-6">
           {pending.length > 0 && (
             <section>
-              <h2 className="mb-2.5 text-sm font-semibold text-slate-900">
-                Awaiting decision{' '}
-                <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+              <SectionTitle>
+                Awaiting decision
+                <span className="ml-2 rounded-full bg-accent-100 px-2 py-0.5 text-xs font-bold text-accent-700">
                   {pending.length}
                 </span>
-              </h2>
+              </SectionTitle>
               <div className="space-y-3">{pending.map(renderCard)}</div>
             </section>
           )}
           {settled.length > 0 && (
             <section>
-              <h2 className="mb-2.5 text-sm font-semibold text-slate-900">History</h2>
+              <SectionTitle>History</SectionTitle>
               <div className="space-y-3">{settled.map(renderCard)}</div>
             </section>
           )}

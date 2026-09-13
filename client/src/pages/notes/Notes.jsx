@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Download, Paperclip, Plus, Trash2, Users } from 'lucide-react';
+import { BookOpen, Download, FileText, Paperclip, Plus, Trash2, Users } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -289,6 +289,8 @@ export default function Notes() {
   return (
     <div className="animate-fade-up">
       <PageHeader
+        icon={BookOpen}
+        tone="indigo"
         title="Notes"
         subtitle={
           isStaff
@@ -312,7 +314,7 @@ export default function Notes() {
           <select
             value={subjectFilter}
             onChange={(e) => setSubjectFilter(e.target.value)}
-            className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none"
+            className="h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-700 elev-1 transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-none"
           >
             <option value="">All subjects</option>
             {subjects.map((s) => (
@@ -334,8 +336,8 @@ export default function Notes() {
         </div>
       )}
 
-      <Card>
-        {!notes.length ? (
+      {!notes.length ? (
+        <Card>
           <EmptyState
             icon={BookOpen}
             title={isStaff ? 'Nothing published yet' : 'No notes yet'}
@@ -353,19 +355,30 @@ export default function Notes() {
               ) : null
             }
           />
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {notes.map((n) => (
-              <li key={n.id} className="px-5 py-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
+        </Card>
+      ) : (
+        /*
+         * A card per note rather than rows in one table. A note is a thing
+         * somebody published, with a title, an author and files hanging off
+         * it — giving each its own surface makes the attachment buttons read
+         * as belonging to that note instead of floating in a shared list.
+         */
+        <ul className="grid gap-3">
+          {notes.map((n) => (
+            <li key={n.id}>
+              <Card className="p-4 transition hover:-translate-y-0.5 hover:elev-2 sm:p-5">
+                <div className="flex items-start gap-3.5">
+                  <span className="hidden h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-indigo-50 to-indigo-100 text-indigo-600 sm:grid">
+                    <FileText className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       {n.subject && (
                         <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold tracking-wide text-slate-600">
                           {n.subject.code}
                         </span>
                       )}
-                      <h3 className="text-sm font-medium text-slate-900">{n.title}</h3>
+                      <h3 className="text-[15px] font-bold text-slate-900">{n.title}</h3>
                       {isStaff && (
                         <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700">
                           <Users className="h-3 w-3" />
@@ -390,7 +403,7 @@ export default function Notes() {
                         <button
                           key={a.id}
                           onClick={() => download(n, a)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/70 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
                         >
                           <Download className="h-3 w-3" />
                           <span className="max-w-56 truncate">{a.filename}</span>
@@ -406,11 +419,11 @@ export default function Notes() {
                     </Button>
                   )}
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <PublishDialog
         open={publishing}

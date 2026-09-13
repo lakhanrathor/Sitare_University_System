@@ -7,24 +7,35 @@ import {
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useSocketEvent } from '../../context/SocketContext';
-import { Card, PageHeader, Spinner, Button, ErrorNote } from '../../components/ui';
+import { Card, HeroPanel, SectionTitle, Spinner, Button, ErrorNote } from '../../components/ui';
 
-function Stat({ icon: Icon, label, value, sub, to, tone = 'slate' }) {
+/*
+ * Four identical white boxes read as one undifferentiated block, and the eye
+ * has to parse the label to tell them apart. A tint per tile does that work
+ * before any reading happens — the gradient runs downward so the number sits
+ * on the strongest part of it.
+ */
+function Stat({ icon: Icon, label, value, sub, to, tone = 'indigo' }) {
   const tones = {
-    slate: 'bg-slate-100 text-slate-600',
-    indigo: 'bg-indigo-50 text-indigo-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    amber: 'bg-amber-50 text-amber-600',
+    indigo: { card: 'from-indigo-50 to-white', chip: 'bg-indigo-100 text-indigo-700' },
+    sky: { card: 'from-sky-50 to-white', chip: 'bg-sky-100 text-sky-700' },
+    emerald: { card: 'from-emerald-50 to-white', chip: 'bg-emerald-100 text-emerald-700' },
+    amber: { card: 'from-amber-50 to-white', chip: 'bg-amber-100 text-amber-700' },
   };
+  const t = tones[tone] || tones.indigo;
   const body = (
-    <Card className={`p-4 ${to ? 'transition hover:border-slate-300 hover:shadow-md' : ''}`}>
+    <Card
+      className={`h-full bg-gradient-to-b p-4 ${t.card} ${
+        to ? 'transition hover:-translate-y-0.5 hover:elev-2' : ''
+      }`}
+    >
       <div className="flex items-start gap-3">
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${tones[tone]}`}>
-          <Icon className="h-4.5 w-4.5" />
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${t.chip}`}>
+          <Icon className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <p className="nums text-2xl leading-tight font-semibold text-slate-900">{value}</p>
-          <p className="text-sm font-medium text-slate-700">{label}</p>
+          <p className="nums text-[26px] leading-tight font-bold text-slate-900">{value}</p>
+          <p className="text-sm font-semibold text-slate-700">{label}</p>
           {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
         </div>
       </div>
@@ -90,19 +101,19 @@ export default function AdminHome() {
   return (
     <div className="animate-fade-up">
       {/* A console, not a personal feed — the header already says who is signed in. */}
-      <PageHeader
+      <HeroPanel
         title="Administration"
         subtitle="Set up the academic structure, publish timetables and handle approvals"
         actions={
           <>
             <Link to="/admin/people">
-              <Button variant="secondary" size="sm">
+              <Button variant="translucent" size="sm">
                 <UserPlus className="h-4 w-4" />
                 Add people
               </Button>
             </Link>
             <Link to="/timetable/manage">
-              <Button size="sm">
+              <Button variant="light" size="sm">
                 <Upload className="h-4 w-4" />
                 Upload timetable
               </Button>
@@ -113,8 +124,8 @@ export default function AdminHome() {
 
       {/* Needs attention */}
       <Card className="mb-6 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5">
-          <h2 className="text-sm font-semibold text-slate-900">Needs your attention</h2>
+        <div className="flex items-center justify-between border-b border-slate-200/70 bg-slate-50/60 px-4 py-3 sm:px-5">
+          <h2 className="text-sm font-bold text-slate-900">Needs your attention</h2>
           {todoTotal > 0 && (
             <span className="nums rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
               {todoTotal}
@@ -175,7 +186,7 @@ export default function AdminHome() {
       </Card>
 
       {/* Numbers */}
-      <h2 className="mb-3 text-base font-semibold text-slate-900">At a glance</h2>
+      <SectionTitle>At a glance</SectionTitle>
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           icon={GraduationCap}
@@ -191,6 +202,7 @@ export default function AdminHome() {
           value={people.faculty}
           sub={`${people.admins} admin ${people.admins === 1 ? 'account' : 'accounts'}`}
           to="/admin/people"
+          tone="sky"
         />
         <Stat
           icon={BookOpen}
@@ -198,6 +210,7 @@ export default function AdminHome() {
           value={academics.subjects}
           sub={`semesters ${academics.semesters.join(', ') || '—'}`}
           to="/admin/academics"
+          tone="amber"
         />
         <Stat
           icon={Activity}
@@ -209,15 +222,18 @@ export default function AdminHome() {
       </div>
 
       {/* Live timetables */}
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-base font-semibold text-slate-900">Live timetables</h2>
-        <Link
-          to="/timetable/manage"
-          className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
-        >
-          Manage all
-        </Link>
-      </div>
+      <SectionTitle
+        action={
+          <Link
+            to="/timetable/manage"
+            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+          >
+            Manage all
+          </Link>
+        }
+      >
+        Live timetables
+      </SectionTitle>
 
       <Card className="overflow-hidden">
         {timetables.published.length === 0 ? (
@@ -261,16 +277,19 @@ export default function AdminHome() {
       </Card>
 
       {/* Shortcuts */}
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+      <SectionTitle className="mt-7">Jump to</SectionTitle>
+      <div className="grid gap-3 sm:grid-cols-3">
         {[
           { to: '/admin/people', icon: Users, title: 'People', body: 'Add teachers and students, assign sections, reset access' },
           { to: '/admin/academics', icon: BookOpen, title: 'Academics', body: 'Sections, subjects, lecturers and enrolment' },
           { to: '/swaps', icon: Repeat, title: 'Approvals', body: 'Decide on class swaps before they reach the timetable' },
         ].map((c) => (
           <Link key={c.to} to={c.to}>
-            <Card className="h-full p-4 transition hover:border-slate-300 hover:shadow-md">
-              <c.icon className="h-4.5 w-4.5 text-indigo-600" />
-              <p className="mt-2.5 text-sm font-semibold text-slate-900">{c.title}</p>
+            <Card className="h-full p-4 transition hover:-translate-y-0.5 hover:elev-2">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
+                <c.icon className="h-5 w-5" />
+              </span>
+              <p className="mt-3 text-sm font-bold text-slate-900">{c.title}</p>
               <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{c.body}</p>
             </Card>
           </Link>

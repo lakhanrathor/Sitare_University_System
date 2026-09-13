@@ -374,7 +374,7 @@ export default function ClassActionsModal({
           <ErrorNote>This class has already happened and can no longer be changed.</ErrorNote>
         )}
 
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+        <div className="elev-1 flex gap-1 rounded-xl border border-slate-200/70 bg-white p-1">
           {(isAdmin ? ADMIN_TABS : TEACHER_TABS).map((t) => (
             <button
               key={t.key}

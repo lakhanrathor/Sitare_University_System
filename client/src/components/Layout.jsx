@@ -37,7 +37,24 @@ const NAV = {
 
 const ROLE_LABEL = { student: 'Student', faculty: 'Faculty', admin: 'Administrator' };
 
-const firstName = (name = '') => name.split(' ').filter(Boolean)[0] || '';
+/*
+ * Staff are stored with the title they are addressed by ("Dr Anuja Agarwal",
+ * "Mr Ajay Sonkar"), so the first word is often not a name at all — greeting
+ * someone "Good morning, Mr" and stamping their avatar "MA" is worse than
+ * having no personalisation. The title is dropped for both.
+ */
+const HONORIFICS = new Set(['mr', 'mrs', 'ms', 'miss', 'dr', 'prof', 'shri', 'smt']);
+
+function nameParts(name = '') {
+  const parts = name.split(' ').filter(Boolean);
+  const stripped = parts.filter(
+    (w) => !HONORIFICS.has(w.toLowerCase().replace(/\.$/, ''))
+  );
+  // A name that is *only* a title is not a name; keep what we were given.
+  return stripped.length ? stripped : parts;
+}
+
+const firstName = (name = '') => nameParts(name)[0] || '';
 
 /* Local time, so the greeting matches the clock the reader is looking at. */
 function greetingFor(hour) {
@@ -47,9 +64,7 @@ function greetingFor(hour) {
 }
 
 function initials(name = '') {
-  return name
-    .split(' ')
-    .filter(Boolean)
+  return nameParts(name)
     .slice(0, 2)
     .map((w) => w[0])
     .join('')

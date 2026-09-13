@@ -11,7 +11,9 @@ import {
   formatDate,
   cohortLine,
 } from '../../lib/format';
-import { Card, PageHeader, Spinner, Button, Badge, EmptyState, ErrorNote } from '../../components/ui';
+import {
+  Card, PageHeader, SectionTitle, Spinner, Button, Badge, EmptyState, ErrorNote,
+} from '../../components/ui';
 
 export default function SubjectReport() {
   const { subjectId } = useParams();
@@ -133,6 +135,8 @@ export default function SubjectReport() {
       </Link>
 
       <PageHeader
+        icon={ClipboardCheck}
+        tone="emerald"
         title={subject.name}
         subtitle={cohortLine(subject)}
         actions={
@@ -154,23 +158,35 @@ export default function SubjectReport() {
       {/* Summary */}
       <div className="mb-6 grid gap-3 sm:grid-cols-4">
         {[
-          { label: 'Classes conducted', value: conducted, sub: `of ${subject.plannedClasses} planned` },
-          { label: 'Students enrolled', value: students.length, sub: 'in this subject' },
+          {
+            label: 'Classes conducted',
+            value: conducted,
+            sub: `of ${subject.plannedClasses} planned`,
+            tint: 'from-indigo-50',
+          },
+          {
+            label: 'Students enrolled',
+            value: students.length,
+            sub: 'in this subject',
+            tint: 'from-sky-50',
+          },
           {
             label: 'Class average',
             value: classAvg === null ? '—' : `${formatPct(classAvg)}%`,
             sub: 'across conducted classes',
+            tint: 'from-emerald-50',
           },
           {
             label: 'Below requirement',
             value: atRisk,
             sub: `under ${min}%`,
+            tint: atRisk > 0 ? 'from-rose-50' : 'from-slate-50',
             tone: atRisk > 0 ? 'text-rose-600' : 'text-slate-900',
           },
         ].map((s) => (
-          <Card key={s.label} className="p-4">
-            <p className="text-xs text-slate-500">{s.label}</p>
-            <p className={`nums mt-1 text-2xl font-semibold ${s.tone || 'text-slate-900'}`}>
+          <Card key={s.label} className={`bg-gradient-to-b to-white p-4 ${s.tint || 'from-indigo-50'}`}>
+            <p className="text-xs font-medium text-slate-500">{s.label}</p>
+            <p className={`nums mt-1 text-[26px] font-bold ${s.tone || 'text-slate-900'}`}>
               {s.value}
             </p>
             <p className="mt-0.5 text-xs text-slate-400">{s.sub}</p>
@@ -190,10 +206,11 @@ export default function SubjectReport() {
       )}
 
       {/* Student table */}
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-base font-semibold text-slate-900">Student attendance</h2>
-        <span className="nums text-xs text-slate-500">out of {conducted} conducted</span>
-      </div>
+      <SectionTitle
+        action={<span className="nums text-xs text-slate-500">out of {conducted} conducted</span>}
+      >
+        Student attendance
+      </SectionTitle>
 
       <Card className="mb-8 overflow-hidden">
         {students.length === 0 ? (
@@ -202,7 +219,7 @@ export default function SubjectReport() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
+                <tr className="border-b border-slate-200/70 bg-slate-50/80 text-left text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
                   <th className="px-4 py-2.5 sm:px-5">Roll no.</th>
                   <th className="px-4 py-2.5">Student</th>
                   <th className="nums px-4 py-2.5 text-right">Present</th>
@@ -240,12 +257,15 @@ export default function SubjectReport() {
       </Card>
 
       {/* Class log */}
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-base font-semibold text-slate-900">Class log</h2>
-        <span className="text-xs text-slate-500">
-          {sessions.conducted} conducted · {sessions.plannedClasses} planned
-        </span>
-      </div>
+      <SectionTitle
+        action={
+          <span className="text-xs text-slate-500">
+            {sessions.conducted} conducted · {sessions.plannedClasses} planned
+          </span>
+        }
+      >
+        Class log
+      </SectionTitle>
 
       <Card className="overflow-hidden">
         {sessions.sessions.length === 0 ? (

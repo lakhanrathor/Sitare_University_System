@@ -11,7 +11,9 @@ import {
   classesCanMiss,
 } from '../../lib/format';
 import AttendanceRing from '../../components/AttendanceRing';
-import { Card, PageHeader, Spinner, Badge, EmptyState, ErrorNote } from '../../components/ui';
+import {
+  Card, PageHeader, SectionTitle, Spinner, Badge, EmptyState, ErrorNote,
+} from '../../components/ui';
 
 const MARK = {
   present: { label: 'Present', icon: CheckCircle2, cls: 'text-emerald-600 bg-emerald-50' },
@@ -154,12 +156,15 @@ export default function StudentSubjectDetail() {
         </div>
       </Card>
 
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-base font-semibold text-slate-900">Class history</h2>
-        <span className="text-xs text-slate-500">
-          {history.length} {history.length === 1 ? 'record' : 'records'}
-        </span>
-      </div>
+      <SectionTitle
+        action={
+          <span className="text-xs text-slate-500">
+            {history.length} {history.length === 1 ? 'record' : 'records'}
+          </span>
+        }
+      >
+        Class history
+      </SectionTitle>
 
       <Card className="overflow-hidden">
         {history.length === 0 ? (

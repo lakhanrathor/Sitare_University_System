@@ -253,6 +253,8 @@ export default function TakeAttendance() {
           Back to my subjects
         </Link>
         <PageHeader
+          icon={CheckCheck}
+          tone="emerald"
           title="Take attendance"
           subtitle={`${schedule.subject.name} · ${cohortLine(schedule.subject)}`}
         />
@@ -280,6 +282,8 @@ export default function TakeAttendance() {
       </Link>
 
       <PageHeader
+        icon={CheckCheck}
+        tone="emerald"
         title="Take attendance"
         subtitle={`${schedule.subject.name} · ${cohortLine(schedule.subject)}`}
         actions={

@@ -8,7 +8,8 @@ import { api, tokenStore, API_ORIGIN } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 import { todayKey } from '../../lib/timetable';
 import {
-  Card, PageHeader, Button, Field, Input, Select, ErrorNote, InfoNote, EmptyState, Spinner,
+  Card, PageHeader, SectionTitle, Button, Field, Input, Select, ErrorNote, InfoNote, EmptyState,
+  Spinner,
   Textarea,
 } from '../../components/ui';
 
@@ -183,6 +184,8 @@ export default function ManageTimetable() {
       </Link>
 
       <PageHeader
+        icon={Upload}
+        tone="accent"
         title="Manage timetable"
         subtitle="Upload a weekly grid and publish it to all staff and students"
         actions={
@@ -202,7 +205,7 @@ export default function ManageTimetable() {
 
       {/* Upload */}
       <Card className="mb-6 p-5">
-        <h2 className="mb-4 text-sm font-semibold text-slate-900">Upload a new timetable</h2>
+        <h2 className="mb-4 text-sm font-bold text-slate-900">Upload a new timetable</h2>
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Name" className="sm:col-span-1">
@@ -490,7 +493,7 @@ export default function ManageTimetable() {
       </Card>
 
       {/* Versions */}
-      <h2 className="mb-3 text-base font-semibold text-slate-900">Versions</h2>
+      <SectionTitle>Versions</SectionTitle>
       {loading ? (
         <Spinner label="Loading versions" />
       ) : versions.length === 0 ? (

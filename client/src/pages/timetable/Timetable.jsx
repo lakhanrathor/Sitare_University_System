@@ -215,6 +215,8 @@ export default function Timetable() {
   return (
     <div className="animate-fade-up">
       <PageHeader
+        icon={CalendarDays}
+        tone="sky"
         title="Timetable"
         subtitle={
           user?.role === 'student'
@@ -244,7 +246,7 @@ export default function Timetable() {
       />
 
       {/* Week navigation */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="elev-1 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white px-3 py-2.5">
         <div className="flex items-center gap-1.5">
           <Button variant="secondary" size="sm" onClick={() => goto(addDaysKey(anchor, -7))}>
             <ChevronLeft className="h-4 w-4" />
@@ -268,7 +270,7 @@ export default function Timetable() {
             <select
               value={semester}
               onChange={(e) => changeSemester(e.target.value)}
-              className="ml-2 h-8 rounded-lg border border-slate-300 bg-white px-2 text-sm font-medium text-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none"
+              className="ml-2 h-8 rounded-lg border border-slate-200 bg-slate-50 px-2 text-sm font-medium text-slate-700 transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100 focus:outline-none"
               aria-label="Semester"
             >
               {meta.semesters.map((s) => (
@@ -303,7 +305,7 @@ export default function Timetable() {
           <table className="w-full border-collapse" style={{ minWidth: columns.length * 152 + 88 }}>
             <thead>
               <tr>
-                <th className="sticky left-0 z-10 w-22 border-r border-b border-slate-200 bg-slate-50 p-2 text-left text-[11px] font-semibold text-slate-500">
+                <th className="sticky left-0 z-10 w-22 border-r border-b border-slate-200 bg-indigo-50/70 p-2 text-left text-[11px] font-semibold tracking-wide text-indigo-900/70 uppercase">
                   Period
                 </th>
                 {week.days
@@ -313,7 +315,9 @@ export default function Timetable() {
                       key={d.date}
                       colSpan={sectionsPerDay}
                       className={`border-r border-b border-slate-200 p-2 text-center text-[11px] font-semibold ${
-                        d.date === todayKey() ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-50 text-slate-600'
+                        d.date === todayKey()
+                          ? 'bg-gradient-to-b from-indigo-500 to-indigo-600 text-white'
+                          : 'bg-indigo-50/70 text-indigo-900/70'
                       }`}
                     >
                       {shortDate(d.date)}
