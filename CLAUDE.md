@@ -181,6 +181,11 @@ before anything is published.
 
 **Notes and exam schedules are scoped to who can actually see them.** A note or exam schedule
 belongs to a `semester` and, optionally, one `section` within it (`null` section = whole year).
+An **exam schedule may also have no semester at all** (`null` = the whole college), because the
+exam sheet here is published as one document listing every year's papers. A CHECK enforces that
+such a schedule carries no section — a section belongs to exactly one year, so "every year" and
+"one cohort" cannot both be true, and a whole-college sheet pinned to a section would be invisible
+to everyone it was meant for.
 Faculty only see notes for cohorts they actually teach, plus their own uploads — not every
 faculty member's material. Students only see their own semester + section.
 
@@ -206,7 +211,7 @@ ScheduleChange -> extra | move | cancel, on a specific date · always carries `t
 SwapRequest    -> two entries + dates · pending|approved|rejected|declined|withdrawn
 
 Note          -> semester, section (nullable), subject, attachments, uploadedBy
-ExamSchedule  -> semester, section (nullable), papers[] (dated), attachments
+ExamSchedule  -> semester (nullable = whole college), section (nullable), papers[] (dated), attachments
 LeaveDocument -> student, sentAt, regarding, attachments · source student|upload|email
 Attachment    -> exactly one of note | exam | leave (CHECK) · File holds the bytes
 Notification  -> per recipient, pushed over the socket and persisted

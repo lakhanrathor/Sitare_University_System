@@ -258,7 +258,8 @@ export const api = {
     const form = new FormData();
     form.append('title', title);
     form.append('examType', examType);
-    form.append('semester', String(semester));
+    // Empty means the whole college; the server reads '' as no semester.
+    form.append('semester', semester == null ? '' : String(semester));
     if (sectionId) form.append('sectionId', sectionId);
     form.append('instructions', instructions || '');
     // Multipart carries no nested structures, so the papers travel as JSON.

@@ -681,7 +681,11 @@ model ExamSchedule {
   /* Text with a CHECK — see the note on TimetableEntry.kind. */
   examType String @default("end-term") @map("exam_type")
 
-  semester Int
+  /// Null means the whole college sits this one — a single sheet covering
+  /// every year, which is how exam timetables are usually published here.
+  /// A section can then not be set: a section belongs to exactly one year, so
+  /// "every year" and "one cohort" cannot both be true. Enforced by a CHECK.
+  semester Int?
 
   /// Null means every cohort of that year sits the same schedule. Restrict for
   /// the same reason as Note.sectionId.

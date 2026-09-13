@@ -44,8 +44,22 @@ const paperSchema = z
 const publishSchema = z.object({
   title: z.string().trim().min(3, 'Give this schedule a title').max(200),
   examType: z.enum(EXAM_TYPES).optional().default('end-term'),
-  semester: z.coerce.number().int().min(1).max(10),
-  sectionId: z.string().uuid().nullable().optional(),
+  /*
+   * Absent means the whole college. The form sends '' for that, and multipart
+   * turns every field into a string, so the empty case is normalised here
+   * rather than being coerced to 0 and failing the range check.
+   */
+  semester: z
+    .preprocess(
+      (v) => (v === '' || v === null || v === undefined ? null : v),
+      z.coerce.number().int().min(1).max(10).nullable()
+    )
+    .optional()
+    .default(null),
+  sectionId: z
+    .preprocess((v) => (v === '' ? null : v), z.string().uuid().nullable())
+    .optional()
+    .default(null),
   instructions: z.string().trim().max(5000).optional().default(''),
   /** Arrives as a JSON string because the request is multipart. */
   papers: z
@@ -89,6 +103,12 @@ const editSchema = z.object({
  * silently never matches.
  */
 
+/** How a schedule's audience reads in a notification. */
+const cohortLine = (semester, sectionName) => {
+  if (semester == null) return 'every year';
+  return `semester ${semester}${sectionName ? `, section ${sectionName}` : ''}`;
+};
+
 const shape = (e) => {
   const papers = [...(e.papers || [])].sort(
     (a, b) => a.dateKey.localeCompare(b.dateKey) || (a.startTime || '').localeCompare(b.startTime || '')
@@ -126,13 +146,26 @@ const shape = (e) => {
 /** What this caller may see. */
 function scopeFor(user, query) {
   if (user.role === 'student') {
+    /*
+     * Two ways a schedule reaches a student: it is addressed to their year
+     * (and either to their cohort or to the whole year), or it is addressed to
+     * no year at all — the single sheet covering the whole college.
+     */
     return {
-      semester: user.semester,
-      OR: [{ sectionId: sectionIdOf(user) }, { sectionId: null }],
+      OR: [
+        { semester: null },
+        {
+          semester: user.semester,
+          OR: [{ sectionId: sectionIdOf(user) }, { sectionId: null }],
+        },
+      ],
     };
   }
   const where = {};
-  if (query.semester) where.semester = Number(query.semester);
+  // A whole-college sheet is every year's business, so it survives the filter.
+  if (query.semester) {
+    where.OR = [{ semester: Number(query.semester) }, { semester: null }];
+  }
   if (query.section) where.sectionId = query.section;
   if (query.examType) where.examType = query.examType;
   return where;
@@ -160,12 +193,16 @@ export const listExams = asyncHandler(async (req, res) => {
 /** Everyone the schedule concerns: the cohort, and the staff who teach them. */
 async function audienceFor({ semester, sectionId }) {
   const studentWhere = { role: 'student', isActive: true };
+  // A null semester is the whole college, so neither filter narrows anything.
   if (sectionId) studentWhere.sectionId = sectionId;
-  else studentWhere.semester = semester;
+  else if (semester != null) studentWhere.semester = semester;
+
+  const subjectWhere = { isActive: true };
+  if (semester != null) subjectWhere.semester = semester;
 
   const [students, subjects] = await Promise.all([
     prisma.user.findMany({ where: studentWhere, select: { id: true } }),
-    prisma.subject.findMany({ where: { semester, isActive: true }, select: { facultyId: true } }),
+    prisma.subject.findMany({ where: subjectWhere, select: { facultyId: true } }),
   ]);
 
   const staff = [...new Set(subjects.map((s) => s.facultyId).filter(Boolean))];
@@ -182,6 +219,11 @@ export const publishExam = asyncHandler(async (req, res) => {
 
   let section = null;
   if (body.sectionId) {
+    if (body.semester == null) {
+      throw ApiError.badRequest(
+        'A sheet covering every year cannot be addressed to one section — choose a semester, or leave the section blank'
+      );
+    }
     section = await prisma.section.findUnique({ where: { id: body.sectionId } });
     if (!section) throw ApiError.notFound('Section not found');
     if (section.semester !== body.semester) {
@@ -236,7 +278,7 @@ export const publishExam = asyncHandler(async (req, res) => {
       await notify(who, {
         type: 'exam:published',
         title: 'Exam timetable published',
-        message: `${body.title} — semester ${body.semester}${section?.name ? `, section ${section.name}` : ''}.`,
+        message: `${body.title} — ${cohortLine(body.semester, section?.name)}.`,
         link: '/exams',
         createdBy: idOf(req.user),
         // Tagged so the notification can be taken back if this is withdrawn.
@@ -356,11 +398,12 @@ async function loadVisible(user, examId) {
   if (!exam) throw ApiError.notFound('That exam timetable no longer exists');
 
   if (user.role === 'student') {
-    const sameYear = Number(exam.semester) === Number(user.semester);
-    const forThem = !exam.sectionId || sameId(exam.sectionId, sectionIdOf(user));
-    if (!sameYear || !forThem) {
-      throw ApiError.forbidden('That timetable is not for your year');
-    }
+    // A schedule with no semester is the whole college's, so it is theirs too.
+    const theirs =
+      exam.semester == null ||
+      (Number(exam.semester) === Number(user.semester) &&
+        (!exam.sectionId || sameId(exam.sectionId, sectionIdOf(user))));
+    if (!theirs) throw ApiError.forbidden('That timetable is not for your year');
   }
   return exam;
 }

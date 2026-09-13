@@ -103,7 +103,7 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects, exam = null
     if (exam) {
       setTitle(exam.title);
       setExamType(exam.examType);
-      setSemester(String(exam.semester));
+      setSemester(exam.semester == null ? '' : String(exam.semester));
       setSectionId(exam.section?.id || '');
       setInstructions(exam.instructions || '');
       // Back to form shape: the list carries a subject object, the rows an id.
@@ -173,8 +173,10 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects, exam = null
       title={editing ? 'Correct this exam timetable' : 'Publish an exam timetable'}
       subtitle={
         editing
-          ? 'The year is told again only if a paper actually moves'
-          : 'Everyone in the year, and the staff who teach them, are notified'
+          ? 'Everyone it was sent to is told again only if a paper actually moves'
+          : semester
+            ? 'Everyone in the year, and the staff who teach them, are notified'
+            : 'Every year, and the staff who teach them, are notified'
       }
       width="max-w-3xl"
       footer={
@@ -185,7 +187,7 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects, exam = null
           <Button
             onClick={publish}
             loading={busy}
-            disabled={title.trim().length < 3 || !semester}
+            disabled={title.trim().length < 3}
           >
             {editing ? 'Save changes' : 'Publish'}
           </Button>
@@ -218,7 +220,11 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects, exam = null
         <div className="grid gap-3 sm:grid-cols-2">
           <Field
             label="Semester"
-            hint={editing ? 'Fixed — this year has already been notified' : undefined}
+            hint={
+              editing
+                ? 'Fixed — this audience has already been notified'
+                : 'One sheet for the whole college? Leave it on all semesters.'
+            }
           >
             <Select
               value={semester}
@@ -228,7 +234,7 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects, exam = null
                 setSectionId('');
               }}
             >
-              <option value="">Choose…</option>
+              <option value="">All semesters</option>
               {semesters.map((s) => (
                 <option key={s} value={s}>
                   Semester {s}
@@ -241,7 +247,9 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects, exam = null
             hint={
               editing
                 ? 'Fixed — withdraw and publish again to address a different cohort'
-                : 'Leave blank when the whole year sits the same papers'
+                : semester
+                  ? 'Leave blank when the whole year sits the same papers'
+                  : 'Only for a single year — every year is being addressed'
             }
           >
             <Select
@@ -249,7 +257,9 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects, exam = null
               onChange={(e) => setSectionId(e.target.value)}
               disabled={!semester || editing}
             >
-              <option value="">Everyone in the semester</option>
+              <option value="">
+                {semester ? 'Everyone in the semester' : 'Everyone in the college'}
+              </option>
               {sectionsHere.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name ? `Section ${s.name}` : 'The whole batch'}
@@ -316,6 +326,8 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects, exam = null
                   {subjectsHere.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.code} — {s.name}
+                      {/* Codes repeat across years, so say which one this is. */}
+                      {semester ? '' : ` · Sem ${s.semester}`}
                       {s.section?.name ? ` · Sec ${s.section.name}` : ''}
                     </option>
                   ))}
@@ -591,7 +603,9 @@ export default function Exams() {
                     <h2 className="text-[15px] font-bold text-slate-900">{e.title}</h2>
                     {isStaff && (
                       <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700">
-                        Sem {e.semester} · {sectionLabel(e.section)}
+                        {e.semester == null
+                          ? 'All semesters'
+                          : `Sem ${e.semester} · ${sectionLabel(e.section)}`}
                       </span>
                     )}
                   </div>
