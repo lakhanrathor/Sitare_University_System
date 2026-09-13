@@ -15,6 +15,7 @@ import {
   setUserStatus,
   deleteUser,
   importStudents,
+  importFaculty,
   listSections,
   createSection,
   updateSection,
@@ -57,6 +58,8 @@ router.get('/faculty', listFacultyWithLoad);
 router.post('/users', validate(createUserSchema), createUser);
 /* Accepts a PDF or CSV roster, or pasted rows; validated inside the controller. */
 router.post('/users/import', uploadPdfOrCsv(), importStudents);
+/* Staff have no cohort to place, so this one takes a CSV and nothing else. */
+router.post('/users/import-faculty', uploadPdfOrCsv(), importFaculty);
 router.patch('/users/:userId', validate(updateUserSchema), updateUser);
 router.patch('/users/:userId/status', setUserStatus);
 router.delete('/users/:userId', deleteUser);

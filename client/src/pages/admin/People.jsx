@@ -202,7 +202,7 @@ export default function People() {
         subtitle="Everyone added or imported here can sign in straight away — students with student123, faculty with faculty123, until they change it"
         actions={
           <>
-            {tab === 'student' && (
+            {(tab === 'student' || tab === 'faculty') && (
               <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
                 <Upload className="h-4 w-4" />
                 Import
@@ -565,10 +565,17 @@ export default function People() {
         )}
       </Modal>
 
+      {/* One button, two dialogs — a cohort and a staff list have almost
+          nothing in common to fill in. */}
       <ImportStudentsModal
-        open={importOpen}
+        open={importOpen && tab === 'student'}
         onClose={() => setImportOpen(false)}
         sections={sections}
+        onDone={load}
+      />
+      <ImportFacultyModal
+        open={importOpen && tab === 'faculty'}
+        onClose={() => setImportOpen(false)}
         onDone={load}
       />
     </div>
@@ -834,6 +841,201 @@ function ImportStudentsModal({ open, onClose, sections, onDone }) {
         <InfoNote>
           Everyone imported gets the password <span className="font-medium">student123</span> and is
           enrolled in their section's existing subjects.
+        </InfoNote>
+      </div>
+    </Modal>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * The staff equivalent of the roster import above.
+ *
+ * Much shorter on purpose: a student has to land in a cohort — semester,
+ * section, roll number, enrolments — and each of those is a way the file can
+ * be wrong. A lecturer belongs to nothing until they are given a subject, so
+ * the file only has to carry a name and an address, and there is nothing to
+ * choose before reading it.
+ */
+function ImportFacultyModal({ open, onClose, onDone }) {
+  const { notify } = useToast();
+  const fileRef = useRef(null);
+  const [file, setFile] = useState(null);
+  const [csv, setCsv] = useState('');
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setCsv('');
+    setFile(null);
+    setResult(null);
+    setError('');
+    if (fileRef.current) fileRef.current.value = '';
+  }, [open]);
+
+  // Reading starts as soon as there is something to read, as it does for
+  // students — a separate "check" step only left Import mysteriously disabled.
+  const run = useCallback(
+    async (dryRun, override = {}) => {
+      const src = { file, csv, ...override };
+      if (!src.file && !src.csv?.trim()) return;
+      setBusy(true);
+      setError('');
+      try {
+        const res = await api.importFaculty({ file: src.file, csv: src.csv, dryRun });
+        if (dryRun || res.errors?.length) setResult(res);
+        else {
+          notify(res.message, { variant: 'success', title: 'Faculty imported' });
+          onDone?.();
+          onClose();
+        }
+      } catch (err) {
+        setError(err.message);
+        setResult(null);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [file, csv, notify, onDone, onClose]
+  );
+
+  const hasSource = Boolean(file) || Boolean(csv.trim());
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Import faculty"
+      subtitle="Bulk-add lecturers from a CSV"
+      width="max-w-xl"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          {busy && <span className="mr-auto text-sm text-slate-500">Reading the file…</span>}
+          <Button onClick={() => run(false)} loading={busy} disabled={!hasSource || !result?.valid}>
+            Import
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {error && <ErrorNote>{error}</ErrorNote>}
+
+        <Field label="Faculty list CSV" hint="Needs columns: name and email. Anything else is ignored.">
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="text/csv,.csv"
+              onChange={(e) => {
+                const picked = e.target.files?.[0] || null;
+                setFile(picked);
+                setCsv('');
+                setResult(null);
+                if (picked) run(true, { file: picked, csv: '' });
+              }}
+              className="block flex-1 text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            />
+            {file && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+                <FileText className="h-3.5 w-3.5" />
+                {file.name}
+              </span>
+            )}
+          </div>
+        </Field>
+
+        <details className="rounded-lg border border-slate-200 px-3.5 py-2.5">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">
+            Paste rows instead
+          </summary>
+          <Textarea
+            rows={5}
+            value={csv}
+            onChange={(e) => {
+              setCsv(e.target.value);
+              setFile(null);
+              setResult(null);
+            }}
+            onBlur={(e) => e.target.value.trim() && run(true, { csv: e.target.value, file: null })}
+            placeholder={'name,email\nDr Neha Kulkarni,neha.kulkarni@sitare.org'}
+            className="mt-3 font-mono text-xs"
+          />
+        </details>
+
+        {result && (
+          <div
+            className={`rounded-lg border px-3.5 py-2.5 text-sm ${
+              result.valid ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'
+            }`}
+          >
+            <p className={`font-medium ${result.valid ? 'text-emerald-800' : 'text-rose-800'}`}>
+              {result.valid
+                ? `${result.count} faculty ready to import`
+                : 'No usable rows were found in this file'}
+            </p>
+            {result.valid && result.readCount > result.count && (
+              <p className="mt-0.5 text-xs text-emerald-900/70">
+                {result.readCount} rows read · {result.readCount - result.count} skipped
+              </p>
+            )}
+            {/* Read back, so a mis-read column is caught before anything is created. */}
+            {result.valid && result.preview?.length > 0 && (
+              <ul className="mt-1.5 space-y-0.5 text-xs text-emerald-900/80">
+                {result.preview.map((r, i) => (
+                  <li key={i}>
+                    {r.name} · {r.email}
+                    {r.employeeId ? ` · ${r.employeeId}` : ''}
+                  </li>
+                ))}
+                {result.count > result.preview.length && (
+                  <li className="text-emerald-700">
+                    …and {result.count - result.preview.length} more
+                  </li>
+                )}
+              </ul>
+            )}
+            {!result.valid && (
+              <ul className="mt-1.5 space-y-0.5 text-xs text-rose-700">
+                {result.errors.slice(0, 8).map((e, i) => (
+                  <li key={i}>
+                    {e.who ? `${e.who}: ` : e.line ? `Row ${e.line}: ` : ''}
+                    {e.message}
+                  </li>
+                ))}
+                {result.errors.length > 8 && <li>…and {result.errors.length - 8} more</li>}
+              </ul>
+            )}
+
+            {/* Skipped rows never block the import — they are only reported. */}
+            {result.valid && result.skipped?.length > 0 && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-emerald-900/80">
+                  {result.skipped.length} row{result.skipped.length === 1 ? '' : 's'} will be
+                  skipped — see why
+                </summary>
+                <ul className="mt-1.5 space-y-0.5 text-xs text-emerald-900/70">
+                  {result.skipped.slice(0, 12).map((s, i) => (
+                    <li key={i}>
+                      {s.who ? `${s.who}: ` : s.line ? `Row ${s.line}: ` : ''}
+                      {s.message}
+                    </li>
+                  ))}
+                  {result.skipped.length > 12 && <li>…and {result.skipped.length - 12} more</li>}
+                </ul>
+              </details>
+            )}
+          </div>
+        )}
+
+        <InfoNote>
+          Everyone imported can sign in straight away with <strong>faculty123</strong>. Give them
+          their subjects afterwards from Academics.
         </InfoNote>
       </div>
     </Modal>

@@ -4,7 +4,7 @@ import { sectionLabel } from '../utils/section.js';
 import ApiError from '../utils/ApiError.js';
 import { getOverallForStudents, getStudentSummary } from '../services/attendanceService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { parseCSVToObjects, STUDENT_COLUMNS } from '../utils/csv.js';
+import { parseCSVToObjects, STUDENT_COLUMNS, FACULTY_COLUMNS } from '../utils/csv.js';
 import { parseStudentsPDF } from '../services/pdfParser.js';
 import { todayKey, addDays } from '../utils/date.js';
 import { idOf, sameId } from '../utils/ids.js';
@@ -691,6 +691,149 @@ export const importStudents = asyncHandler(async (req, res) => {
     success: true,
     message:
       `${created.length} students added with the default password` +
+      (skipped.length ? `, ${skipped.length} row${skipped.length === 1 ? '' : 's'} skipped` : ''),
+    data: { count: created.length, skipped, errors: [] },
+  });
+});
+
+/**
+ * Bulk-add lecturers from a CSV.
+ *
+ * Deliberately thinner than the student import beside it. A student has to
+ * land in a cohort — a semester, a section, a roll number, and enrolments in
+ * that section's subjects — and every one of those is a way the file can be
+ * wrong. A lecturer belongs to nothing until they are given a subject, so the
+ * only things that cannot be guessed are a name and an address to sign in
+ * with. Everything else in the file is read if recognised and ignored if not.
+ *
+ * CSV only, no PDF: pdfParser's roster reader is built around a roll-number
+ * column to anchor its rows on, and a staff list has none.
+ */
+export const importFaculty = asyncHandler(async (req, res) => {
+  const dryRun = req.body.dryRun === true || req.body.dryRun === 'true';
+
+  let records;
+  if (req.file) {
+    const isCsv =
+      /csv/i.test(req.file.mimetype) || req.file.originalname.toLowerCase().endsWith('.csv');
+    if (!isCsv) {
+      throw ApiError.badRequest(
+        'Upload a CSV for staff — a PDF roster can only be read for students, where the roll number anchors each row'
+      );
+    }
+    ({ records } = parseCSVToObjects(req.file.buffer.toString('utf-8'), FACULTY_COLUMNS));
+  } else if (req.body?.csv?.trim()) {
+    ({ records } = parseCSVToObjects(req.body.csv, FACULTY_COLUMNS));
+  } else {
+    throw ApiError.badRequest('Attach a CSV, or paste the rows');
+  }
+
+  if (!records.length) throw ApiError.badRequest('No rows could be read');
+
+  /*
+   * Bad rows are skipped and listed, never guessed at — the same rule the
+   * student import follows. Refusing a whole file over two typos helps nobody,
+   * and inventing an address for a row that has none is worse than both.
+   */
+  const skipped = [];
+  const rows = [];
+  const seenEmail = new Set();
+  const seenEmployeeId = new Set();
+
+  for (const r of records) {
+    const line = r.__line;
+    const name = (r.name || '').trim();
+    // A stray space inside an address is a formatting artefact, not the address.
+    const email = (r.email || '').replace(/\s+/g, '').toLowerCase();
+    const employeeId = (r.employeeid || '').replace(/\s+/g, '').toUpperCase();
+    const department = (r.department || '').trim();
+
+    const skip = (message) => skipped.push({ line, who: name || email, message });
+
+    if (!name) skip('no name');
+    else if (!/^\S+@\S+\.\S+$/.test(email)) skip(`unusable email "${(r.email || '').trim()}"`);
+    else if (seenEmail.has(email)) skip(`${email} appears twice in the file`);
+    else if (employeeId && seenEmployeeId.has(employeeId)) {
+      skip(`employee id ${employeeId} appears twice in the file`);
+    } else {
+      seenEmail.add(email);
+      if (employeeId) seenEmployeeId.add(employeeId);
+      rows.push({ name, email, employeeId, department, line });
+    }
+  }
+
+  /*
+   * Anyone already here is skipped rather than duplicated. Employee ids are
+   * matched too, and only the ids actually present in the file — an `in: []`
+   * over a nullable unique column would otherwise match every account that
+   * has none.
+   */
+  const employeeIds = rows.map((r) => r.employeeId).filter(Boolean);
+  const clashes = await prisma.user.findMany({
+    where: {
+      OR: [
+        { email: { in: rows.map((r) => r.email) } },
+        ...(employeeIds.length ? [{ employeeId: { in: employeeIds } }] : []),
+      ],
+    },
+    select: { email: true, employeeId: true },
+  });
+  const takenEmail = new Set(clashes.map((c) => c.email));
+  const takenEmployeeId = new Set(clashes.map((c) => c.employeeId).filter(Boolean));
+
+  const importable = rows.filter((r) => {
+    if (takenEmail.has(r.email) || (r.employeeId && takenEmployeeId.has(r.employeeId))) {
+      skipped.push({ line: r.line, who: r.name, message: 'already registered' });
+      return false;
+    }
+    return true;
+  });
+
+  if (dryRun) {
+    return res.json({
+      success: true,
+      data: {
+        valid: importable.length > 0,
+        count: importable.length,
+        source: 'csv',
+        readCount: records.length,
+        // Read back, so a mis-read column is caught here rather than after.
+        preview: importable.slice(0, 8).map((r) => ({
+          name: r.name,
+          email: r.email,
+          employeeId: r.employeeId || null,
+        })),
+        skipped,
+        errors: importable.length ? [] : skipped,
+        dryRun: true,
+      },
+    });
+  }
+
+  // Hashed once for the whole file: bcrypt is slow and every row gets the same
+  // default, so hashing per lecturer would cost a hundred times as much for an
+  // identical result.
+  const defaultPassword = await hashPassword('faculty123');
+
+  const created = await prisma.$transaction(
+    importable.map((r) =>
+      prisma.user.create({
+        data: {
+          name: r.name,
+          email: r.email,
+          password: defaultPassword,
+          role: 'faculty',
+          employeeId: r.employeeId || null,
+          department: r.department || 'Computer Science',
+        },
+      })
+    )
+  );
+
+  res.status(201).json({
+    success: true,
+    message:
+      `${created.length} faculty added with the default password` +
       (skipped.length ? `, ${skipped.length} row${skipped.length === 1 ? '' : 's'} skipped` : ''),
     data: { count: created.length, skipped, errors: [] },
   });

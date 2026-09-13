@@ -153,6 +153,30 @@ export const STUDENT_COLUMNS = {
   batch: ['batch', 'batchyear', 'admissionyear', 'yearofadmission'],
 };
 
+/**
+ * The same, for a staff list.
+ *
+ * Only name and email are read from the row — a lecturer has no cohort to
+ * belong to, so there is nothing else a file has to carry. An employee id and
+ * a department are picked up when the file happens to name them, and ignored
+ * when it does not.
+ */
+export const FACULTY_COLUMNS = {
+  name: [
+    'name', 'facultyname', 'fullname', 'teachername', 'lecturername', 'nameoffaculty',
+    'staffname', 'employeename', 'nameofteacher',
+  ],
+  email: [
+    'email', 'emailid', 'emailaddress', 'mailid', 'officialemail', 'collegeemail',
+    'facultyemail', 'staffemail', 'workemail',
+  ],
+  employeeid: [
+    'employeeid', 'empid', 'employeecode', 'empcode', 'staffid', 'facultyid',
+    'employeenumber', 'empno', 'staffcode',
+  ],
+  department: ['department', 'dept', 'branch', 'discipline'],
+};
+
 /** The same, for a timetable uploaded as a list of periods. */
 export const TIMETABLE_COLUMNS = {
   day: ['day', 'weekday', 'dayofweek', 'days'],

@@ -246,6 +246,14 @@ export const api = {
     // A dry run only reports what it would do — safe to send again.
     return request('/admin/users/import', { method: 'POST', form });
   },
+  /* Staff belong to no cohort, so there is no semester or section to send. */
+  importFaculty: ({ file, csv, dryRun }) => {
+    const form = new FormData();
+    form.append('dryRun', String(Boolean(dryRun)));
+    if (file) form.append('file', file);
+    if (csv) form.append('csv', csv);
+    return request('/admin/users/import-faculty', { method: 'POST', form });
+  },
 
   /* ---- Exam timetables ---- */
   exams: (params = {}) => {
