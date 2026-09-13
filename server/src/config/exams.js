@@ -5,4 +5,4 @@
  * column, so a value that never passed validation cannot arrive by any other
  * route either.
  */
-export const EXAM_TYPES = ['mid-term', 'end-term', 'practical', 're-exam', 'other'];
+export const EXAM_TYPES = ['ut', 'mid-term', 'end-term', 'other'];

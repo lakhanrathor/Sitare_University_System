@@ -29,11 +29,12 @@ import {
   InfoNote,
 } from '../../components/ui';
 
+/* In the order they fall in a term. Must stay in step with the server's
+   EXAM_TYPES, which the CHECK on the column enforces. */
 const EXAM_TYPES = [
+  { value: 'ut', label: 'UT' },
   { value: 'mid-term', label: 'Mid-term' },
   { value: 'end-term', label: 'End-term' },
-  { value: 'practical', label: 'Practical' },
-  { value: 're-exam', label: 'Re-exam' },
   { value: 'other', label: 'Other' },
 ];
 
