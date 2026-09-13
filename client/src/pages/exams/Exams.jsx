@@ -38,6 +38,16 @@ const EXAM_TYPES = [
   { value: 'other', label: 'Other' },
 ];
 
+/*
+ * The label as written above, never the stored value dressed up with CSS.
+ * `capitalize` on the raw value turned 'ut' into "Ut" — the stored form is an
+ * identifier, and how a word is capitalised is not something a text-transform
+ * can work out. An unrecognised value falls back to itself rather than
+ * disappearing, so an older row still says what it is.
+ */
+const examTypeLabel = (value) =>
+  EXAM_TYPES.find((t) => t.value === value)?.label || String(value || '').replace('-', ' ');
+
 const readableSize = (bytes) => {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
@@ -598,8 +608,8 @@ export default function Exams() {
                   </span>
                   <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-md bg-accent-50 px-1.5 py-0.5 text-[11px] font-bold text-accent-700 capitalize">
-                      {e.examType.replace('-', ' ')}
+                    <span className="rounded-md bg-accent-50 px-1.5 py-0.5 text-[11px] font-bold text-accent-700">
+                      {examTypeLabel(e.examType)}
                     </span>
                     <h2 className="text-[15px] font-bold text-slate-900">{e.title}</h2>
                     {isStaff && (
