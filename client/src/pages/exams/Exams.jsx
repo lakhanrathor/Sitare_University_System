@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarClock,
   Download,
+  PencilLine,
   Paperclip,
   Plus,
   Trash2,
@@ -61,7 +62,18 @@ function countdown(dateKey) {
 
 const blankPaper = () => ({ subjectId: '', label: '', dateKey: '', startTime: '', endTime: '', room: '' });
 
-function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
+/*
+ * One dialog for both publishing and correcting.
+ *
+ * Kept as one component rather than two, because the paper rows are the whole
+ * form and a second copy of them would drift — a field added to publishing and
+ * forgotten here is exactly the bug an admin would hit while fixing a typo.
+ * `exam` being set is the only difference: the fields that decide who was
+ * notified (semester, section, the attached file) are then fixed, since the
+ * cohort has already been told.
+ */
+function PublishDialog({ open, onClose, onSaved, sections, subjects, exam = null }) {
+  const editing = Boolean(exam);
   const { notify } = useToast();
   const [title, setTitle] = useState('');
   const [examType, setExamType] = useState('end-term');
@@ -86,15 +98,34 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
 
   useEffect(() => {
     if (!open) return;
+    setError('');
+    setFiles([]);
+    if (exam) {
+      setTitle(exam.title);
+      setExamType(exam.examType);
+      setSemester(String(exam.semester));
+      setSectionId(exam.section?.id || '');
+      setInstructions(exam.instructions || '');
+      // Back to form shape: the list carries a subject object, the rows an id.
+      setPapers(
+        exam.papers.map((p) => ({
+          subjectId: p.subject?.id || '',
+          label: p.label || '',
+          dateKey: p.dateKey,
+          startTime: p.startTime || '',
+          endTime: p.endTime || '',
+          room: p.room || '',
+        }))
+      );
+      return;
+    }
     setTitle('');
     setExamType('end-term');
     setSemester('');
     setSectionId('');
     setInstructions('');
     setPapers([]);
-    setFiles([]);
-    setError('');
-  }, [open]);
+  }, [open, exam]);
 
   const setPaper = (i, patch) =>
     setPapers((rows) => rows.map((r, n) => (n === i ? { ...r, ...patch } : r)));
@@ -103,20 +134,29 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
     setBusy(true);
     setError('');
     try {
-      await api.publishExam({
-        title,
-        examType,
-        semester,
-        sectionId,
-        instructions,
-        // Rows the admin started but left blank are dropped, not rejected.
-        papers: papers.filter((p) => p.dateKey && (p.subjectId || p.label.trim())),
-        files,
-      });
-      notify('Students and their teachers have been told', {
-        variant: 'success',
-        title: 'Exam timetable published',
-      });
+      // Rows the admin started but left blank are dropped, not rejected.
+      const rows = papers.filter((p) => p.dateKey && (p.subjectId || p.label.trim()));
+      if (editing) {
+        await api.updateExam(exam.id, { title, examType, instructions, papers: rows });
+        notify('The corrected dates are live', {
+          variant: 'success',
+          title: 'Exam timetable updated',
+        });
+      } else {
+        await api.publishExam({
+          title,
+          examType,
+          semester,
+          sectionId,
+          instructions,
+          papers: rows,
+          files,
+        });
+        notify('Students and their teachers have been told', {
+          variant: 'success',
+          title: 'Exam timetable published',
+        });
+      }
       onSaved();
       onClose();
     } catch (err) {
@@ -130,8 +170,12 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Publish an exam timetable"
-      subtitle="Everyone in the year, and the staff who teach them, are notified"
+      title={editing ? 'Correct this exam timetable' : 'Publish an exam timetable'}
+      subtitle={
+        editing
+          ? 'The year is told again only if a paper actually moves'
+          : 'Everyone in the year, and the staff who teach them, are notified'
+      }
       width="max-w-3xl"
       footer={
         <>
@@ -143,7 +187,7 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
             loading={busy}
             disabled={title.trim().length < 3 || !semester}
           >
-            Publish
+            {editing ? 'Save changes' : 'Publish'}
           </Button>
         </>
       }
@@ -172,9 +216,13 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Semester">
+          <Field
+            label="Semester"
+            hint={editing ? 'Fixed — this year has already been notified' : undefined}
+          >
             <Select
               value={semester}
+              disabled={editing}
               onChange={(e) => {
                 setSemester(e.target.value);
                 setSectionId('');
@@ -188,11 +236,18 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
               ))}
             </Select>
           </Field>
-          <Field label="Section" hint="Leave blank when the whole year sits the same papers">
+          <Field
+            label="Section"
+            hint={
+              editing
+                ? 'Fixed — withdraw and publish again to address a different cohort'
+                : 'Leave blank when the whole year sits the same papers'
+            }
+          >
             <Select
               value={sectionId}
               onChange={(e) => setSectionId(e.target.value)}
-              disabled={!semester}
+              disabled={!semester || editing}
             >
               <option value="">Everyone in the semester</option>
               {sectionsHere.map((s) => (
@@ -204,17 +259,24 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
           </Field>
         </div>
 
-        <Field
-          label="Timetable file"
-          hint="The signed sheet students will want — PDF, image or document."
-        >
-          <input
-            type="file"
-            multiple
-            onChange={(e) => setFiles([...e.target.files])}
-            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
-          />
-        </Field>
+        {editing ? (
+          <InfoNote>
+            The attached sheet stays as it is. If the file itself is wrong, withdraw this
+            timetable and publish the corrected one.
+          </InfoNote>
+        ) : (
+          <Field
+            label="Timetable file"
+            hint="The signed sheet students will want — PDF, image or document."
+          >
+            <input
+              type="file"
+              multiple
+              onChange={(e) => setFiles([...e.target.files])}
+              className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            />
+          </Field>
+        )}
         {files.length > 0 && (
           <ul className="space-y-1 text-xs text-slate-600">
             {files.map((f) => (
@@ -244,7 +306,7 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
           </p>
 
           {papers.map((p, i) => (
-            <div key={i} className="mb-2 grid gap-2 rounded-lg border border-slate-200 p-2 sm:grid-cols-12">
+            <div key={i} className="mb-2 grid gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-2.5 sm:grid-cols-12">
               <div className="sm:col-span-4">
                 <Select
                   value={p.subjectId}
@@ -271,19 +333,19 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
                 type="date"
                 value={p.dateKey}
                 onChange={(e) => setPaper(i, { dateKey: e.target.value })}
-                className="h-10 rounded-lg border border-slate-300 px-2 text-sm sm:col-span-3"
+                className="h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-none sm:col-span-3"
               />
               <input
                 type="time"
                 value={p.startTime}
                 onChange={(e) => setPaper(i, { startTime: e.target.value })}
-                className="h-10 rounded-lg border border-slate-300 px-2 text-sm sm:col-span-2"
+                className="h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-none sm:col-span-2"
               />
               <input
                 type="time"
                 value={p.endTime}
                 onChange={(e) => setPaper(i, { endTime: e.target.value })}
-                className="h-10 rounded-lg border border-slate-300 px-2 text-sm sm:col-span-2"
+                className="h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-none sm:col-span-2"
               />
               <button
                 onClick={() => setPapers((r) => r.filter((_, n) => n !== i))}
@@ -311,8 +373,9 @@ function PublishDialog({ open, onClose, onSaved, sections, subjects }) {
         </Field>
 
         <InfoNote>
-          Attach the sheet, list the papers, or both. The file is what students download; the papers
-          are what the portal can remind them about.
+          {editing
+            ? 'Correcting a paper here updates the date and the countdown students already see. Their copy of the attached sheet is unchanged.'
+            : 'Attach the sheet, list the papers, or both. The file is what students download; the papers are what the portal can remind them about.'}
         </InfoNote>
       </div>
     </Modal>
@@ -342,6 +405,8 @@ export default function Exams() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [publishing, setPublishing] = useState(false);
+  /* The schedule being corrected, or null while publishing a new one. */
+  const [editing, setEditing] = useState(null);
   const [semesterFilter, setSemesterFilter] = useState('');
 
   const load = useCallback(async () => {
@@ -539,9 +604,19 @@ export default function Exams() {
                   </div>
                 </div>
                 {isAdmin && (
-                  <Button variant="ghost" size="sm" onClick={() => remove(e)} title="Remove">
-                    <Trash2 className="h-4 w-4 text-slate-400" />
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditing(e)}
+                      title="Correct the papers"
+                    >
+                      <PencilLine className="h-4 w-4 text-slate-400" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => remove(e)} title="Remove">
+                      <Trash2 className="h-4 w-4 text-slate-400" />
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -629,8 +704,12 @@ export default function Exams() {
       )}
 
       <PublishDialog
-        open={publishing}
-        onClose={() => setPublishing(false)}
+        open={publishing || Boolean(editing)}
+        exam={editing}
+        onClose={() => {
+          setPublishing(false);
+          setEditing(null);
+        }}
         onSaved={load}
         sections={sections}
         subjects={subjects}

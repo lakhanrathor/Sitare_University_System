@@ -64,6 +64,25 @@ const publishSchema = z.object({
     .pipe(z.array(paperSchema).max(60)),
 });
 
+/*
+ * Correcting a published schedule.
+ *
+ * Deliberately narrower than publishing: the semester, the section and the
+ * attached file are not editable here. Those three decide *who was told* —
+ * the notification has already gone to that cohort, and quietly re-pointing a
+ * schedule at a different year would leave the wrong people holding it. A
+ * schedule addressed to the wrong cohort is withdrawn and published again.
+ *
+ * Not multipart, unlike publishing, because no file crosses this boundary —
+ * so `papers` is a real array rather than a JSON string.
+ */
+const editSchema = z.object({
+  title: z.string().trim().min(3, 'Give this schedule a title').max(200),
+  examType: z.enum(EXAM_TYPES),
+  instructions: z.string().trim().max(5000).optional().default(''),
+  papers: z.array(paperSchema).max(60),
+});
+
 /**
  * `protect` populates the signed-in user's section, so it arrives as a
  * document rather than an id. A query filter casts it, but a string comparison
@@ -239,6 +258,95 @@ export const publishExam = asyncHandler(async (req, res) => {
   }
 });
 
+/*
+ * What a reader would notice. Title and instructions are edited far more often
+ * than the papers are — a typo in a heading is not worth a notification to
+ * three hundred people, but a paper that moved day is.
+ */
+const paperFingerprint = (papers) =>
+  JSON.stringify(
+    [...papers]
+      .map((p) => [p.subjectId || '', p.label || '', p.dateKey, p.startTime || '', p.endTime || '', p.room || ''])
+      .sort()
+  );
+
+export const updateExam = asyncHandler(async (req, res) => {
+  const body = editSchema.parse(req.body);
+
+  const exam = await prisma.examSchedule.findUnique({
+    where: { id: req.params.examId },
+    include: { papers: true, attachments: { select: { id: true } } },
+  });
+  if (!exam) throw ApiError.notFound('That exam timetable no longer exists');
+
+  // The same floor publishing has: a schedule with neither is not a schedule.
+  if (!exam.attachments.length && !body.papers.length) {
+    throw ApiError.badRequest('Keep at least one paper, or the schedule has nothing in it');
+  }
+
+  const before = paperFingerprint(exam.papers);
+  const after = paperFingerprint(body.papers);
+
+  /*
+   * Replaced wholesale rather than diffed. The dialog hands back the list as
+   * the admin now wants it, and a half-applied correction — the old date gone
+   * but the new one not yet written — is worse than either state.
+   */
+  await prisma.$transaction([
+    prisma.examPaper.deleteMany({ where: { examId: exam.id } }),
+    prisma.examSchedule.update({
+      where: { id: exam.id },
+      data: {
+        title: body.title,
+        examType: body.examType,
+        instructions: body.instructions,
+        papers: {
+          create: body.papers.map((p) => ({
+            subjectId: p.subjectId || null,
+            label: p.label,
+            dateKey: p.dateKey,
+            startTime: p.startTime,
+            endTime: p.endTime,
+            room: p.room,
+          })),
+        },
+      },
+    }),
+  ]);
+
+  /*
+   * Only when a paper actually moved. Someone who has already planned around
+   * the old date has to be told again — but the correction is a fresh
+   * notification rather than an edit of the original, because the original may
+   * long since have been read and dismissed.
+   */
+  if (before !== after) {
+    const { students, staff } = await audienceFor({
+      semester: exam.semester,
+      sectionId: exam.sectionId,
+    });
+    const who = [...new Set([...students, ...staff])];
+    if (who.length) {
+      await notify(who, {
+        type: 'exam:updated',
+        title: 'Exam timetable corrected',
+        message: `${body.title} — check your paper dates again.`,
+        link: '/exams',
+        createdBy: idOf(req.user),
+        meta: { examId: exam.id },
+      });
+      emitToUsers(who, 'exam:published', { examId: exam.id });
+    }
+  }
+
+  const full = await prisma.examSchedule.findUnique({
+    where: { id: exam.id },
+    include: examInclude,
+  });
+
+  res.json({ success: true, message: 'Exam timetable updated', data: shape(full) });
+});
+
 /** A schedule is readable by the cohort it is addressed to, and by all staff. */
 async function loadVisible(user, examId) {
   const exam = await prisma.examSchedule.findUnique({
@@ -284,9 +392,10 @@ export const deleteExam = asyncHandler(async (req, res) => {
   });
   if (!exam) throw ApiError.notFound('That exam timetable no longer exists');
 
-  // Nobody should keep being told about a timetable that is gone.
+  // Nobody should keep being told about a timetable that is gone — including
+  // by a correction notice, which outlives the original it corrected.
   await withdrawNotifications({
-    type: 'exam:published',
+    type: { in: ['exam:published', 'exam:updated'] },
     // A Json column, so the key inside it is addressed by path.
     meta: { path: ['examId'], equals: exam.id },
   });

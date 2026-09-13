@@ -266,6 +266,12 @@ export const api = {
     for (const f of files || []) form.append('files', f);
     return request('/exams', { method: 'POST', form });
   },
+  /* Correcting one carries no file, so it is plain JSON rather than a form. */
+  updateExam: (id, { title, examType, instructions, papers }) =>
+    request(`/exams/${id}`, {
+      method: 'PATCH',
+      body: { title, examType, instructions: instructions || '', papers },
+    }),
   deleteExam: (id) => request(`/exams/${id}`, { method: 'DELETE' }),
   downloadExamFile: (examId, attachmentId, filename) =>
     downloadBlob(`/exams/${examId}/attachments/${attachmentId}`, filename),
