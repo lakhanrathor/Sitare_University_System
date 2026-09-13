@@ -10,7 +10,7 @@ import { styleFor } from '../lib/format';
 export function Card({ className = '', children, ...rest }) {
   return (
     <div
-      className={`rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/3 ${className}`}
+      className={`elev-1 rounded-2xl border border-slate-200/70 bg-white ${className}`}
       {...rest}
     >
       {children}
@@ -22,7 +22,7 @@ export function PageHeader({ title, subtitle, actions }) {
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
+        <h1 className="text-[22px] font-bold tracking-tight text-slate-900 sm:text-[26px]">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
@@ -35,10 +35,17 @@ export function PageHeader({ title, subtitle, actions }) {
 /* ---------------------------------------------------------------- */
 
 const BTN = {
+  /*
+   * A gradient rather than a flat fill, and a shadow tinted with the button's
+   * own colour rather than black — a grey shadow under a coloured element is
+   * one of the things that makes an interface look unfinished.
+   */
   primary:
-    'bg-indigo-600 text-white hover:bg-indigo-700 focus-visible:outline-indigo-600 disabled:bg-indigo-300',
+    'bg-gradient-to-b from-indigo-500 to-indigo-600 text-white shadow-md shadow-indigo-600/20 hover:from-indigo-600 hover:to-indigo-700 focus-visible:outline-indigo-600 disabled:from-indigo-300 disabled:to-indigo-300 disabled:shadow-none',
+  accent:
+    'bg-gradient-to-b from-accent-400 to-accent-500 text-white shadow-md shadow-accent-600/25 hover:from-accent-500 hover:to-accent-600 focus-visible:outline-accent-500 disabled:from-accent-200 disabled:to-accent-200 disabled:shadow-none',
   secondary:
-    'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus-visible:outline-slate-400 disabled:text-slate-400',
+    'bg-white text-slate-700 border border-slate-200 shadow-sm hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-slate-400 disabled:text-slate-400',
   ghost: 'text-slate-600 hover:bg-slate-100 focus-visible:outline-slate-400',
   danger:
     'bg-white text-rose-600 border border-rose-200 hover:bg-rose-50 focus-visible:outline-rose-500',
@@ -53,11 +60,11 @@ export function Button({
   disabled,
   ...rest
 }) {
-  const sizes = { sm: 'h-8 px-3 text-[13px]', md: 'h-10 px-4 text-sm', lg: 'h-11 px-5 text-sm' };
+  const sizes = { sm: 'h-8 px-3.5 text-[13px]', md: 'h-10 px-4 text-sm', lg: 'h-11 px-5 text-sm' };
   return (
     <button
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed ${BTN[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed ${BTN[variant]} ${sizes[size]} ${className}`}
       {...rest}
     >
       {loading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -76,10 +83,10 @@ export function Input({ label, error, className = '', id, ...rest }) {
       )}
       <input
         id={id}
-        className={`h-10 w-full rounded-lg border bg-white px-3 text-sm text-slate-900 transition placeholder:text-slate-400 focus:ring-2 focus:outline-none ${
+        className={`h-10 w-full rounded-xl border bg-white px-3.5 text-sm text-slate-900 transition placeholder:text-slate-400 focus:ring-4 focus:outline-none ${
           error
             ? 'border-rose-300 focus:border-rose-400 focus:ring-rose-100'
-            : 'border-slate-300 focus:border-indigo-500 focus:ring-indigo-100'
+            : 'border-slate-200 focus:border-indigo-400 focus:ring-indigo-100'
         }`}
         {...rest}
       />
@@ -96,7 +103,7 @@ export function Badge({ status, children, className = '' }) {
   const s = styleFor(status);
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${s.bg} ${s.border} ${s.text} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${s.bg} ${s.border} ${s.text} ${className}`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
       {children ?? s.label}
@@ -116,8 +123,8 @@ export function Spinner({ label = 'Loading' }) {
 export function EmptyState({ icon: Icon = Inbox, title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-      <div className="mb-3 rounded-xl bg-slate-100 p-3">
-        <Icon className="h-5 w-5 text-slate-400" />
+      <div className="mb-3 rounded-2xl bg-indigo-50 p-3.5">
+        <Icon className="h-5 w-5 text-indigo-400" />
       </div>
       <p className="text-sm font-medium text-slate-900">{title}</p>
       {description && <p className="mt-1 max-w-sm text-sm text-slate-500">{description}</p>}
@@ -128,7 +135,7 @@ export function EmptyState({ icon: Icon = Inbox, title, description, action }) {
 
 export function ErrorNote({ children }) {
   return (
-    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700">
+    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700">
       {children}
     </div>
   );
@@ -136,9 +143,9 @@ export function ErrorNote({ children }) {
 
 export function InfoNote({ children, icon: Icon = Info }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg bg-slate-50 px-3.5 py-2.5">
-      <Icon className="mt-px h-4 w-4 shrink-0 text-slate-400" />
-      <p className="text-xs leading-relaxed text-slate-500">{children}</p>
+    <div className="flex items-start gap-2.5 rounded-xl bg-indigo-50/60 px-3.5 py-2.5">
+      <Icon className="mt-px h-4 w-4 shrink-0 text-indigo-400" />
+      <p className="text-xs leading-relaxed text-slate-600">{children}</p>
     </div>
   );
 }
@@ -172,7 +179,7 @@ export function Modal({ open, onClose, title, subtitle, children, footer, width 
   return createPortal(
     <div className="fixed inset-0 z-40 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div
-        className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-indigo-950/40 backdrop-blur-[3px]"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -180,9 +187,9 @@ export function Modal({ open, onClose, title, subtitle, children, footer, width 
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`animate-fade-up relative flex max-h-[92vh] w-full ${width} flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl`}
+        className={`animate-fade-up elev-2 relative flex max-h-[92vh] w-full ${width} flex-col overflow-hidden rounded-t-3xl bg-white sm:rounded-3xl`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200/70 px-5 py-4">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             {subtitle && <p className="mt-0.5 truncate text-sm text-slate-500">{subtitle}</p>}
@@ -199,7 +206,7 @@ export function Modal({ open, onClose, title, subtitle, children, footer, width 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
         {footer && (
-          <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+          <div className="flex items-center justify-end gap-2 border-t border-slate-200/70 bg-slate-50/70 px-5 py-3">
             {footer}
           </div>
         )}
@@ -222,7 +229,7 @@ export function Field({ label, hint, children, className = '' }) {
 export function Select({ className = '', children, ...rest }) {
   return (
     <select
-      className={`h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none ${className}`}
+      className={`h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-none ${className}`}
       {...rest}
     >
       {children}
@@ -233,7 +240,7 @@ export function Select({ className = '', children, ...rest }) {
 export function Textarea({ className = '', ...rest }) {
   return (
     <textarea
-      className={`w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none ${className}`}
+      className={`w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 focus:outline-none ${className}`}
       {...rest}
     />
   );

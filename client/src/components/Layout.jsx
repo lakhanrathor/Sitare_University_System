@@ -37,6 +37,15 @@ const NAV = {
 
 const ROLE_LABEL = { student: 'Student', faculty: 'Faculty', admin: 'Administrator' };
 
+const firstName = (name = '') => name.split(' ').filter(Boolean)[0] || '';
+
+/* Local time, so the greeting matches the clock the reader is looking at. */
+function greetingFor(hour) {
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 function initials(name = '') {
   return name
     .split(' ')
@@ -45,6 +54,41 @@ function initials(name = '') {
     .map((w) => w[0])
     .join('')
     .toUpperCase();
+}
+
+/*
+ * One nav row, shared by the fixed sidebar and the mobile drawer so the two
+ * cannot drift apart. The active row is the only orange thing on screen: on a
+ * deep violet panel it is the one element that has to be findable without
+ * reading, and reserving the colour for exactly that keeps it meaning "you
+ * are here" rather than becoming decoration.
+ */
+function NavRow({ link, onNavigate }) {
+  return (
+    <NavLink
+      to={link.to}
+      end={link.end}
+      onClick={onNavigate}
+      className={({ isActive }) =>
+        `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+          isActive
+            ? 'bg-accent-500 text-white shadow-lg shadow-accent-900/25'
+            : 'text-indigo-100/80 hover:bg-white/10 hover:text-white'
+        }`
+      }
+    >
+      <link.icon className="h-4.5 w-4.5 shrink-0" strokeWidth={2} />
+      <span className="truncate">{link.label}</span>
+      {link.badge > 0 && (
+        <span
+          className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-white px-1.5 text-[11px] font-bold text-indigo-700"
+          title={`${link.badge} waiting on you`}
+        >
+          {link.badge}
+        </span>
+      )}
+    </NavLink>
+  );
 }
 
 export default function Layout() {
@@ -81,162 +125,96 @@ export default function Layout() {
     if (String(n.type || '').startsWith('swap:')) countWaiting();
   });
 
+  // The drawer must not survive a navigation, or the next page opens covered.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  const now = new Date();
+  const greeting = greetingFor(now.getHours());
+  const today = now.toLocaleDateString(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+
   const links = (NAV[user?.role] || []).map((l) =>
     l.to === '/swaps' ? { ...l, badge: swapsWaiting } : l
   );
 
-  /* The week grid needs the extra width to show Mon-Fri without scrolling;
-     the reading-width pages stay narrow. */
+  /* The week grid needs every pixel it can get; reading-width pages stay narrow. */
   const wide = pathname.startsWith('/timetable');
-  const container = wide ? 'max-w-[88rem]' : 'max-w-6xl';
 
   const handleLogout = () => {
     logout();
     navigate('/login', { replace: true });
   };
 
-  return (
-    <div className="flex min-h-full flex-col">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur-md">
-        <div
-          className={`mx-auto flex h-16 ${container} items-center justify-between gap-4 px-4 sm:px-6`}
-        >
-          <div className="flex items-center gap-6">
-            <Link to="/" className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-indigo-600 text-white">
-                <GraduationCap className="h-5 w-5" strokeWidth={2.2} />
-              </span>
-              <span className="leading-tight">
-                <span className="block text-sm font-semibold tracking-tight text-slate-900">
-                  Sitare University
-                </span>
-                <span className="block text-[11px] font-medium text-slate-500">
-                </span>
-              </span>
-            </Link>
+  const sidebar = (
+    <>
+      <Link to="/" className="flex items-center gap-3 px-2 py-1">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15 text-white backdrop-blur">
+          <GraduationCap className="h-5.5 w-5.5" strokeWidth={2.2} />
+        </span>
+        <span className="leading-tight">
+          <span className="block text-[15px] font-semibold tracking-tight text-white">Sitare</span>
+          <span className="block text-[11px] font-medium text-indigo-200/70">University ERP</span>
+        </span>
+      </Link>
 
-            <nav className="hidden items-center gap-1 md:flex">
-              {links.map((l) => (
-                <NavLink
-                  key={l.to}
-                  to={l.to}
-                  end={l.end}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                      isActive
-                        ? 'bg-indigo-50 text-indigo-700'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`
-                  }
-                >
-                  <l.icon className="h-4 w-4" />
-                  {l.label}
-                  {l.badge > 0 && (
-                    <span
-                      className="grid h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[11px] font-semibold text-white"
-                      title={`${l.badge} waiting on you`}
-                    >
-                      {l.badge}
-                    </span>
-                  )}
-                </NavLink>
-              ))}
-            </nav>
-          </div>
+      <nav className="mt-7 flex flex-1 flex-col gap-1">
+        {links.map((l) => (
+          <NavRow key={l.to} link={l} onNavigate={() => setMenuOpen(false)} />
+        ))}
+      </nav>
 
-          <div className="flex items-center gap-3">
-            {/* Live indicator — confirms the realtime channel is up. */}
-            <span
-              className="hidden items-center gap-1.5 text-xs font-medium text-slate-500 sm:flex"
-              title={connected ? 'Live updates active' : 'Reconnecting…'}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  connected ? 'animate-pulse bg-emerald-500' : 'bg-slate-300'
-                }`}
-              />
-              {connected ? 'Live' : 'Offline'}
+      {/*
+        The signed-in person, pinned to the bottom. On a shared machine in a
+        staff room, "who am I posting as" is worth being able to check without
+        opening a menu.
+      */}
+      <div className="mt-6 rounded-2xl bg-white/10 p-3 backdrop-blur">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white text-xs font-bold text-indigo-700">
+            {initials(user?.name)}
+          </span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-sm font-semibold text-white">{user?.name}</span>
+            <span className="block truncate text-[11px] text-indigo-200/80">
+              {user?.rollNumber || ROLE_LABEL[user?.role]}
             </span>
-
-            <NotificationBell />
-
-            <div className="hidden items-center gap-2.5 border-l border-slate-200 pl-3 sm:flex">
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-                {initials(user?.name)}
-              </span>
-              <span className="leading-tight">
-                <span className="block max-w-40 truncate text-sm font-medium text-slate-900">
-                  {user?.name}
-                </span>
-                <span className="block text-[11px] text-slate-500">
-                  {user?.rollNumber || ROLE_LABEL[user?.role]}
-                </span>
-              </span>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className="hidden rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 sm:block"
-              title="Sign out"
-              aria-label="Sign out"
-            >
-              <LogOut className="h-4.5 w-4.5" />
-            </button>
-
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              className="rounded-lg p-2 text-slate-600 transition hover:bg-slate-100 sm:hidden"
-              aria-label="Toggle menu"
-            >
-              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-          </div>
+          </span>
         </div>
+        <button
+          onClick={handleLogout}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-white/10 py-2 text-xs font-semibold text-indigo-100 transition hover:bg-white/20 hover:text-white"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          Sign out
+        </button>
+      </div>
+    </>
+  );
 
-        {menuOpen && (
-          <div className="border-t border-slate-200 bg-white px-4 py-3 sm:hidden">
-            <div className="mb-2 flex items-center gap-2.5 rounded-lg bg-slate-50 px-3 py-2.5">
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-xs font-semibold text-slate-600">
-                {initials(user?.name)}
-              </span>
-              <span className="leading-tight">
-                <span className="block text-sm font-medium text-slate-900">{user?.name}</span>
-                <span className="block text-[11px] text-slate-500">
-                  {user?.rollNumber || ROLE_LABEL[user?.role]}
-                </span>
-              </span>
-            </div>
-            {links.map((l) => (
-              <NavLink
-                key={l.to}
-                to={l.to}
-                end={l.end}
-                onClick={() => setMenuOpen(false)}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium ${
-                    isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600'
-                  }`
-                }
-              >
-                <l.icon className="h-4 w-4" />
-                {l.label}
-                {l.badge > 0 && (
-                  <span className="grid h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[11px] font-semibold text-white">
-                    {l.badge}
-                  </span>
-                )}
-              </NavLink>
-            ))}
-            <button
-              onClick={handleLogout}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </button>
-          </div>
-        )}
-      </header>
+  return (
+    <div className="flex min-h-full">
+      {/* Fixed rail on a desktop; the drawer below covers everything narrower. */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-gradient-to-b from-indigo-700 via-indigo-800 to-indigo-950 p-4 lg:flex">
+        {sidebar}
+      </aside>
+
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div
+            className="absolute inset-0 bg-indigo-950/50 backdrop-blur-[2px]"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <aside className="animate-slide-in absolute inset-y-0 left-0 flex w-64 flex-col bg-gradient-to-b from-indigo-700 via-indigo-800 to-indigo-950 p-4">
+            {sidebar}
+          </aside>
+        </div>
+      )}
 
       {/*
         min-w-0 overrides a flex item's default min-width: auto — without it, a
@@ -244,15 +222,66 @@ export default function Layout() {
         own max-width instead of respecting it, and the whole page scrolls
         sideways rather than just the grid's own overflow-x-auto container.
       */}
-      <main className={`mx-auto w-full min-w-0 ${container} flex-1 px-4 py-7 sm:px-6 sm:py-9`}>
-        <Outlet />
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
+        <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-canvas/80 backdrop-blur-md">
+          <div
+            className={`mx-auto flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6 ${
+              wide ? 'max-w-[92rem]' : 'max-w-6xl'
+            }`}
+          >
+            <button
+              onClick={() => setMenuOpen(true)}
+              className="rounded-xl p-2 text-slate-600 transition hover:bg-white lg:hidden"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
 
-      <footer className="border-t border-slate-200 py-5">
-        <p className="text-center text-xs text-slate-400">
-          Attendance is calculated on classes actually conducted, not the semester plan.
-        </p>
-      </footer>
+            {/*
+              The greeting is not decoration: on a shared staff machine it is
+              the fastest way to notice you are looking at somebody else's
+              session before you mark a register as them.
+            */}
+            <div className="hidden min-w-0 lg:block">
+              <p className="truncate text-sm font-semibold text-slate-900">
+                {greeting}, {firstName(user?.name)}
+              </p>
+              <p className="text-xs text-slate-500">{today}</p>
+            </div>
+
+            <div className="ml-auto flex items-center gap-3">
+              {/* Live indicator — confirms the realtime channel is up. */}
+              <span
+                className="hidden items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-500 elev-1 sm:flex"
+                title={connected ? 'Live updates active' : 'Reconnecting…'}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    connected ? 'animate-pulse bg-emerald-500' : 'bg-slate-300'
+                  }`}
+                />
+                {connected ? 'Live' : 'Offline'}
+              </span>
+
+              <NotificationBell />
+            </div>
+          </div>
+        </header>
+
+        <main
+          className={`mx-auto w-full min-w-0 flex-1 px-4 py-7 sm:px-6 sm:py-8 ${
+            wide ? 'max-w-[92rem]' : 'max-w-6xl'
+          }`}
+        >
+          <Outlet />
+        </main>
+
+        <footer className="px-4 py-6 sm:px-6">
+          <p className="text-center text-xs text-slate-400">
+            Attendance is calculated on classes actually conducted, not the semester plan.
+          </p>
+        </footer>
+      </div>
     </div>
   );
 }

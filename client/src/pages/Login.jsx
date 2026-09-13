@@ -104,13 +104,29 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm animate-fade-up">
+    /*
+      A tinted field rather than the flat canvas the rest of the app uses. This
+      is the one screen with nothing else on it, and a signed-out visitor has no
+      other cue that they are looking at a finished product.
+    */
+    <div className="relative flex min-h-full items-center justify-center overflow-hidden bg-gradient-to-br from-indigo-50 via-canvas to-accent-50 px-4 py-12">
+      {/* Two soft washes of colour, well clear of the card so nothing behind the
+          text ever reduces its contrast. */}
+      <div
+        className="pointer-events-none absolute -top-28 -left-28 h-80 w-80 rounded-full bg-indigo-300/25 blur-3xl"
+        aria-hidden="true"
+      />
+      <div
+        className="pointer-events-none absolute -right-24 -bottom-24 h-72 w-72 rounded-full bg-accent-300/25 blur-3xl"
+        aria-hidden="true"
+      />
+
+      <div className="animate-fade-up relative w-full max-w-sm">
         <div className="mb-8 text-center">
-          <span className="mb-4 inline-grid h-12 w-12 place-items-center rounded-xl bg-indigo-600 text-white">
-            <GraduationCap className="h-6 w-6" strokeWidth={2.2} />
+          <span className="mb-4 inline-grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-lg shadow-indigo-600/25">
+            <GraduationCap className="h-7 w-7" strokeWidth={2.2} />
           </span>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             Sitare University
           </h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -121,7 +137,7 @@ export default function Login() {
         {mode === 'signin' ? (
           <form
             onSubmit={submit}
-            className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+            className="elev-2 space-y-4 rounded-3xl border border-white/60 bg-white/90 p-6 backdrop-blur"
           >
             {error && <ErrorNote>{error}</ErrorNote>}
 
@@ -188,7 +204,7 @@ export default function Login() {
         ) : (
           <form
             onSubmit={submitChangePassword}
-            className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+            className="elev-2 space-y-4 rounded-3xl border border-white/60 bg-white/90 p-6 backdrop-blur"
           >
             {cpError && <ErrorNote>{cpError}</ErrorNote>}
 

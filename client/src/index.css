@@ -1,7 +1,47 @@
 @import 'tailwindcss';
 
+/*
+ * The palette, defined once.
+ *
+ * `indigo` is deliberately redefined rather than replaced with a new name:
+ * every screen already reaches for `bg-indigo-600` and `text-indigo-700`, so
+ * shifting what indigo *means* restyles the whole application without touching
+ * fifteen files — and without a half-migrated period where two blues are on
+ * screen at once. The scale below is a warmer, deeper violet than Tailwind's
+ * default, which reads as considered rather than default-blue.
+ *
+ * `accent` is new and separate. Amber already carries meaning here — it is the
+ * "needs attention" attendance state — so the orange used for emphasis has to
+ * be its own name, or a highlight and a warning become indistinguishable.
+ */
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-indigo-50: #eeecfd;
+  --color-indigo-100: #ded9fb;
+  --color-indigo-200: #c4bcf8;
+  --color-indigo-300: #a294f3;
+  --color-indigo-400: #8168ec;
+  --color-indigo-500: #6947e0;
+  --color-indigo-600: #5a35d1;
+  --color-indigo-700: #4c2ab4;
+  --color-indigo-800: #3f2493;
+  --color-indigo-900: #342078;
+  --color-indigo-950: #1f1250;
+
+  --color-accent-50: #fff5ed;
+  --color-accent-100: #ffe8d4;
+  --color-accent-200: #ffcda8;
+  --color-accent-300: #ffa970;
+  --color-accent-400: #ff7c36;
+  --color-accent-500: #fb5c12;
+  --color-accent-600: #ec4208;
+  --color-accent-700: #c33009;
+  --color-accent-800: #9b2810;
+  --color-accent-900: #7d2410;
+
+  /* The page itself — warm, so white cards read as raised rather than flush. */
+  --color-canvas: #f8f6f4;
 }
 
 :root {
@@ -28,13 +68,30 @@ body {
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-canvas text-slate-900 antialiased;
   font-feature-settings: 'cv11', 'ss01';
 }
 
 /* Tabular figures keep percentages from jittering as they update live. */
 .nums {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Card elevation, as one rule rather than a shadow guessed at per component.
+ * Two layers: a tight contact shadow that reads as the edge of the card, and a
+ * wide diffuse one that lifts it off the canvas. A single large blur alone
+ * looks like fog rather than height.
+ */
+.elev-1 {
+  box-shadow:
+    0 1px 2px rgb(31 18 80 / 0.04),
+    0 4px 16px -4px rgb(31 18 80 / 0.06);
+}
+.elev-2 {
+  box-shadow:
+    0 1px 3px rgb(31 18 80 / 0.06),
+    0 12px 32px -8px rgb(31 18 80 / 0.12);
 }
 
 ::-webkit-scrollbar {
