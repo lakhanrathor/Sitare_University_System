@@ -6,7 +6,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { idOf, sameId } from '../utils/ids.js';
 import { sectionIdOf } from '../utils/user.js';
 import { putFile, openFile, deleteFiles } from '../services/fileStore.js';
-import { notify, withdrawNotifications } from '../services/notificationService.js';
+import { notify, withdrawNotifications, adminIds } from '../services/notificationService.js';
 import { emitToUsers } from '../sockets/index.js';
 
 /*
@@ -200,12 +200,26 @@ async function audienceFor({ semester, sectionId }) {
   const subjectWhere = { isActive: true };
   if (semester != null) subjectWhere.semester = semester;
 
-  const [students, subjects] = await Promise.all([
+  const [students, subjects, admins] = await Promise.all([
     prisma.user.findMany({ where: studentWhere, select: { id: true } }),
     prisma.subject.findMany({ where: subjectWhere, select: { facultyId: true } }),
+    adminIds(),
   ]);
 
-  const staff = [...new Set(subjects.map((s) => s.facultyId).filter(Boolean))];
+  /*
+   * Administrators are part of the audience, not just the source.
+   *
+   * They were left out, so the only people who could not see that an exam
+   * timetable had been published were the ones responsible for it — an office
+   * with two admins had no way for the second to learn the first had put a
+   * sheet up, which is exactly the thing this system exists to stop happening
+   * over email. Everywhere else that a shared, published thing changes uses
+   * facultyAndAdminIds, and this now matches. The person who did it is
+   * excluded at the call site; nobody needs telling what they just did.
+   */
+  const staff = [
+    ...new Set([...subjects.map((s) => s.facultyId).filter(Boolean), ...admins]),
+  ];
   return { students: students.map(idOf), staff };
 }
 
@@ -273,7 +287,7 @@ export const publishExam = asyncHandler(async (req, res) => {
       semester: body.semester,
       sectionId: section?.id,
     });
-    const who = [...new Set([...students, ...staff])];
+    const who = [...new Set([...students, ...staff])].filter((id) => !sameId(id, req.user));
     if (who.length) {
       await notify(who, {
         type: 'exam:published',
@@ -367,7 +381,7 @@ export const updateExam = asyncHandler(async (req, res) => {
       semester: exam.semester,
       sectionId: exam.sectionId,
     });
-    const who = [...new Set([...students, ...staff])];
+    const who = [...new Set([...students, ...staff])].filter((id) => !sameId(id, req.user));
     if (who.length) {
       await notify(who, {
         type: 'exam:updated',
@@ -442,10 +456,37 @@ export const deleteExam = asyncHandler(async (req, res) => {
     // A Json column, so the key inside it is addressed by path.
     meta: { path: ['examId'], equals: exam.id },
   });
+  /*
+   * Who was holding it, worked out before the row goes — afterwards there is
+   * no semester left to ask about.
+   */
+  const { students, staff } = await audienceFor({
+    semester: exam.semester,
+    sectionId: exam.sectionId,
+  });
+
   // The record before the bytes: the other order leaves attachments still
   // pointing at the files, and the foreign key refuses.
   await prisma.examSchedule.delete({ where: { id: exam.id } });
   await deleteFiles((exam.attachments || []).map((a) => a.fileId));
+
+  /*
+   * Withdrawing the old notice is not the same as saying it is gone. Somebody
+   * who had already read "exam timetable published" and planned around it
+   * would otherwise just find the page empty, with nothing to say why — and a
+   * cancelled exam sheet is not a quiet change.
+   */
+  const told = [...new Set([...students, ...staff])].filter((id) => !sameId(id, req.user));
+  if (told.length) {
+    await notify(told, {
+      type: 'exam:withdrawn',
+      title: 'Exam timetable withdrawn',
+      message: `"${exam.title}" — ${cohortLine(exam.semester, null)} — has been taken down.`,
+      link: '/exams',
+      createdBy: idOf(req.user),
+    });
+    emitToUsers(told, 'exam:published', { examId: exam.id });
+  }
 
   res.json({ success: true, message: 'Exam timetable removed', data: { id: exam.id } });
 });
