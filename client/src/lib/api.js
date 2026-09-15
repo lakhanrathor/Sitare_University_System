@@ -236,6 +236,8 @@ export const api = {
   setUserStatus: (id, isActive) =>
     request(`/admin/users/${id}/status`, { method: 'PATCH', body: { isActive } }),
   deleteUser: (id) => request(`/admin/users/${id}`, { method: 'DELETE' }),
+  /* POST, not DELETE: a DELETE carrying a body is poorly supported. */
+  deleteUsers: (ids) => request('/admin/users/delete', { method: 'POST', body: { ids } }),
   importStudents: ({ file, csv, semester, sectionId, dryRun }) => {
     const form = new FormData();
     form.append('semester', String(semester));

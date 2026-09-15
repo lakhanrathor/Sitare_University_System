@@ -46,6 +46,8 @@ export default function People() {
   const [formError, setFormError] = useState('');
 
   const [importOpen, setImportOpen] = useState(false);
+  /* Ids, not rows: the list is refetched constantly and row objects go stale. */
+  const [selected, setSelected] = useState(() => new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,6 +104,62 @@ export default function People() {
       [u.name, u.email, u.rollNumber, u.employeeId].some((v) => (v || '').toLowerCase().includes(q))
     );
   }, [users, query]);
+
+  /*
+   * A selection only ever means rows that are still on screen. Changing tab or
+   * filter would otherwise leave people selected that nobody can see, and
+   * "Delete 12" would take somebody out of a list the admin is not looking at.
+   */
+  const shownIds = useMemo(() => visible.map((u) => u.id), [visible]);
+  const selectedShown = useMemo(
+    () => shownIds.filter((id) => selected.has(id)),
+    [shownIds, selected]
+  );
+  const allShownSelected = shownIds.length > 0 && selectedShown.length === shownIds.length;
+  const someShownSelected = selectedShown.length > 0;
+
+  const toggleOne = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleAllShown = () =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allShownSelected) shownIds.forEach((id) => next.delete(id));
+      else shownIds.forEach((id) => next.add(id));
+      return next;
+    });
+
+  const clearSelection = () => setSelected(new Set());
+
+  const removeSelected = async () => {
+    const ids = selectedShown;
+    if (!ids.length) return;
+    const people = visible.filter((u) => ids.includes(u.id));
+    const names = people.slice(0, 5).map((u) => u.name).join(', ');
+    const more = people.length > 5 ? ` and ${people.length - 5} more` : '';
+    const extra =
+      tab === 'student'
+        ? '\n\nTheir attendance records go with them.'
+        : tab === 'faculty'
+          ? '\n\nTheir subjects and timetable periods stay, but with no lecturer assigned.'
+          : '';
+    const line = `Delete ${people.length} ${people.length === 1 ? 'person' : 'people'} permanently?`;
+    if (!window.confirm(`${line}\n\n${names}${more}${extra}\n\nThis cannot be undone.`))
+      return;
+    try {
+      const res = await api.deleteUsers(ids);
+      notify(res.message, { variant: 'success', title: 'Deleted' });
+      clearSelection();
+      await load();
+    } catch (err) {
+      notify(err.message, { variant: 'error', title: 'Could not delete' });
+    }
+  };
 
   const openCreate = () => {
     setFormError('');
@@ -233,6 +291,7 @@ export default function People() {
                  * section and no attendance.
                  */
                 setUsers([]);
+                setSelected(new Set());
                 setLoading(true);
                 setTab(t.key);
               }}
@@ -342,6 +401,30 @@ export default function People() {
 
       {error && <ErrorNote>{error}</ErrorNote>}
 
+      {/*
+        Only while something is selected, and it says how many and who —
+        "Delete 9" with no names is how the wrong nine get deleted.
+      */}
+      {someShownSelected && (
+        <div className="elev-1 mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5">
+          <span className="text-sm font-semibold text-indigo-900">
+            {selectedShown.length} selected
+          </span>
+          <button
+            onClick={clearSelection}
+            className="text-xs font-medium text-indigo-700 underline-offset-2 hover:underline"
+          >
+            Clear
+          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="danger" size="sm" onClick={removeSelected}>
+              <Trash2 className="h-4 w-4" />
+              Delete {selectedShown.length}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <Spinner label="Loading people" />
       ) : (
@@ -356,6 +439,21 @@ export default function People() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200/70 bg-slate-50/80 text-left text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+                    <th className="w-10 pl-4 sm:pl-5">
+                      <input
+                        type="checkbox"
+                        aria-label="Select everyone shown"
+                        className="rounded border-slate-300"
+                        /* Shown, not stored: "all" means everything the
+                           filters currently leave on screen, which changes as
+                           they do. */
+                        checked={allShownSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someShownSelected && !allShownSelected;
+                        }}
+                        onChange={toggleAllShown}
+                      />
+                    </th>
                     <th className="px-4 py-2.5 sm:px-5">{tab === 'student' ? 'Roll no.' : 'ID'}</th>
                     <th className="px-4 py-2.5">Name</th>
                     <th className="px-4 py-2.5">Email</th>
@@ -367,7 +465,19 @@ export default function People() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {visible.map((u) => (
-                    <tr key={u.id} className={`transition hover:bg-slate-50 ${u.isActive ? '' : 'opacity-60'}`}>
+                    <tr
+                      key={u.id}
+                      className={`transition ${selected.has(u.id) ? 'bg-indigo-50/60' : 'hover:bg-slate-50'} ${u.isActive ? '' : 'opacity-60'}`}
+                    >
+                      <td className="w-10 pl-4 sm:pl-5">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${u.name}`}
+                          className="rounded border-slate-300"
+                          checked={selected.has(u.id)}
+                          onChange={() => toggleOne(u.id)}
+                        />
+                      </td>
                       <td className="nums px-4 py-3 font-mono text-xs text-slate-500 sm:px-5">
                         {u.rollNumber || u.employeeId || '—'}
                       </td>

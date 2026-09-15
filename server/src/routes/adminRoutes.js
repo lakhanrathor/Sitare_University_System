@@ -14,6 +14,8 @@ import {
   updateUser,
   setUserStatus,
   deleteUser,
+  deleteUsers,
+  deleteUsersSchema,
   importStudents,
   importFaculty,
   listSections,
@@ -62,6 +64,9 @@ router.post('/users/import', uploadPdfOrCsv(), importStudents);
 router.post('/users/import-faculty', uploadPdfOrCsv(), importFaculty);
 router.patch('/users/:userId', validate(updateUserSchema), updateUser);
 router.patch('/users/:userId/status', setUserStatus);
+/* Before '/users/:userId' would ever be consulted, and a POST besides: a
+   DELETE carrying a body is poorly supported by too much of the stack. */
+router.post('/users/delete', validate(deleteUsersSchema), deleteUsers);
 router.delete('/users/:userId', deleteUser);
 
 /* One student in full — attendance and what they have sent in. */

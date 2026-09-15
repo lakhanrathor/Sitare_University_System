@@ -491,6 +491,65 @@ export const deleteUser = asyncHandler(async (req, res) => {
   });
 });
 
+export const deleteUsersSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1, 'Choose at least one person').max(200),
+});
+
+/**
+ * Delete several people at once.
+ *
+ * Not a loop over the single delete: `purgeUsers` already takes a set and runs
+ * it in one transaction, and the two guards below are only answerable for the
+ * whole selection. Deleting admins one at a time passes the "is this the last
+ * one" check every time until it doesn't, leaving some gone and some not;
+ * asked once against the set, either the whole selection is safe or none of it
+ * runs.
+ */
+export const deleteUsers = asyncHandler(async (req, res) => {
+  const { ids } = deleteUsersSchema.parse(req.body);
+  const unique = [...new Set(ids)];
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: unique } },
+    select: { id: true, name: true, role: true },
+  });
+  if (users.length !== unique.length) {
+    throw ApiError.notFound('Some of those people no longer exist — reload and try again');
+  }
+
+  /*
+   * Signing yourself out of your own administration is not a thing to discover
+   * afterwards. The single-delete route cannot hit this — you would have to
+   * pick yourself out of a list — but a select-all can.
+   */
+  if (users.some((u) => sameId(u, req.user))) {
+    throw ApiError.badRequest('You cannot delete your own account');
+  }
+
+  const admins = users.filter((u) => u.role === 'admin').length;
+  if (admins > 0) {
+    const remaining = await prisma.user.count({
+      where: { role: 'admin', id: { notIn: unique } },
+    });
+    if (remaining === 0) {
+      throw ApiError.badRequest(
+        'That would delete every admin account and leave nobody able to administer the system'
+      );
+    }
+  }
+
+  const counts = await purgeUsers(unique);
+  const detail = describePurge({ ...counts, users: 0 });
+  const label =
+    users.length === 1 ? `${users[0].name} (${users[0].role})` : `${users.length} people`;
+
+  res.json({
+    success: true,
+    message: `${label} deleted${detail ? ` — removed ${detail}` : ''}`,
+    data: { ...counts, deleted: users.length },
+  });
+});
+
 /** Bulk-add students from a CSV: name, email, rollNumber, section[, batch]. */
 export const importStudents = asyncHandler(async (req, res) => {
   const semester = Number(req.body.semester);
