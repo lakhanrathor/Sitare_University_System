@@ -210,6 +210,23 @@ telling somebody what they just did is noise, and noise is what makes a bell sto
 When an audience looks like it is not firing, check whether the only account being tested *is*
 the actor before concluding the notification is broken.
 
+**An account is only ever created where a real email address was typed.** Exactly three
+production paths create a `User`, and each fixes the role it may create: `createUser` (the Add
+person form), `importStudents` (`role: 'student'`, hard-coded) and `importFaculty`
+(`role: 'faculty'`, hard-coded). Nothing else may, and the seeds plus `create-admin.mjs` are the
+only other writers anywhere. Google sign-in deliberately creates nothing — an unknown address is
+refused and told to contact the administrator.
+
+This is worth guarding because it was quietly broken once. The timetable importer used to create
+a faculty account for every name printed on a grid, deriving the address from the name: "Amit
+Sir" became `amit.sir@sitare.org`. A timetable prints whatever fits the cell — a title, an
+initial, a nickname, two people sharing a slash — so the address was a guess that merely looked
+official, and the account was unusable by the person it named. An importer may *match* an
+existing account; it may not invent one. A name that matches nobody leaves the period
+unassigned and is reported, and the admin sets the subject's lecturer afterwards — which fills
+in every period of that subject at once, since a period with no lecturer of its own displays the
+subject's.
+
 **Deactivate, don't delete.** Attendance records reference people and subjects, so removing
 them would tear holes in past registers. Faculty, students, subjects with recorded history, and
 sections are deactivated/retired, never hard-deleted, and a lecturer who still teaches something
