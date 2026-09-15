@@ -1067,7 +1067,7 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
   for (const name of unmatchedNames.values()) {
     notes.push({
       line: 0,
-      message: `"${name}" is not a staff account — those periods are unassigned. Add them under People, then set the lecturer on the subject.`,
+      message: `"${name}" is not a staff account — those periods are unassigned`,
     });
   }
 

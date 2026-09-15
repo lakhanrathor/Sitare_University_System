@@ -397,10 +397,7 @@ export default function ManageTimetable() {
                   account
                 </p>
                 <p className="mt-1 text-xs text-amber-900/80">
-                  {preview.toCreate.unmatchedFaculty.join(', ')} — no account is created from a
-                  timetable, because the name printed in a cell is not an email address. Add them
-                  under <span className="font-medium">People → Faculty</span>, then set each
-                  subject's lecturer from Academics; every period of that subject picks it up.
+                  {preview.toCreate.unmatchedFaculty.join(', ')}
                 </p>
               </div>
             )}
