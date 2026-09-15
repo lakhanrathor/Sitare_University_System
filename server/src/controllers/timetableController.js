@@ -833,6 +833,13 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
   const seenCell = new Map();
   const seenFaculty = new Map();
 
+  /*
+   * Existing subjects that have no lecturer of their own and whose lecturer
+   * this file names. Collected here and written at commit time, because the
+   * name may belong to an account that does not exist yet.
+   */
+  const adoptions = new Map();
+
   /** Find, or note for creation, the lecturer a printed name refers to. */
   const resolveFaculty = (rawName) => {
     const key = normName(rawName);
@@ -976,6 +983,31 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
         if (hit) facultyRef = { id: hit.id, name: hit.name, isNew: false };
       }
 
+      /*
+       * A subject that already exists but has nobody assigned takes the
+       * lecturer the file gives it.
+       *
+       * Only the *first* upload used to assign anyone, because a lecturer was
+       * set when a subject was created and never afterwards. Delete the staff
+       * — which leaves the subjects standing with facultyId null, by design
+       * (see purgeService) — and re-upload the same grid, and every subject
+       * stayed unassigned while the periods showed a name, so the Academics
+       * list read as assigned and the edit dialog said "Choose…".
+       *
+       * Deliberately only when there is nobody: a subject that already has a
+       * lecturer keeps them. Re-uploading a grid must not silently hand
+       * somebody's subject to whoever happens to be printed in a cell — a
+       * period covered by a colleague is exactly what the entry's own faculty
+       * field is for.
+       */
+      if (subject && !subject.facultyId && facultyRef && !adoptions.has(subject.id)) {
+        adoptions.set(subject.id, { ref: facultyRef, code: subject.code });
+        notes.push({
+          line,
+          message: `${subject.code} had no lecturer — assigned to ${facultyRef.name} from the file`,
+        });
+      }
+
       // One cohort, one class per period: a repeat is a duplicate cell, so the
       // first reading wins and the rest is noted.
       const cellKey = `${day}|${slot}|${section ? sid : 'all'}`;
@@ -1070,6 +1102,16 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
       });
     }
     createdFaculty.set(key, doc);
+  }
+
+  /*
+   * After the accounts exist, so a name the file introduced for the first time
+   * can be adopted in the same upload that creates it.
+   */
+  for (const [subjectId, a] of adoptions) {
+    const doc = a.ref.isNew ? createdFaculty.get(a.ref.key) : { id: a.ref.id };
+    if (!doc?.id) continue;
+    await prisma.subject.update({ where: { id: subjectId }, data: { facultyId: doc.id } });
   }
 
   const createdSubjects = new Map();
