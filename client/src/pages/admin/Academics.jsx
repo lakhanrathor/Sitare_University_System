@@ -547,9 +547,12 @@ export default function Academics() {
                 onChange={(e) => setSubjectForm((f) => ({ ...f, facultyId: e.target.value }))}
               >
                 <option value="">Choose…</option>
+                {/* The name alone. A load figure beside it is a different
+                    decision from "who teaches this", and reading past it to
+                    find a name in a list of ten is work for no gain. */}
                 {faculty.map((f) => (
                   <option key={f.id} value={f.id}>
-                    {f.name} — {f.subjectCount} subjects, {f.periodsPerWeek} periods/week
+                    {f.name}
                   </option>
                 ))}
               </Select>

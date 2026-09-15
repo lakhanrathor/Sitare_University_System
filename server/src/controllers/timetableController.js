@@ -7,7 +7,7 @@ import { parseCSVToObjects, toCSV, TIMETABLE_COLUMNS } from '../utils/csv.js';
 import { parseTimetablePDF } from '../services/pdfParser.js';
 import { todayKey, toUTCDate } from '../utils/date.js';
 import { idOf, sameId } from '../utils/ids.js';
-import { hashPassword, sectionIdOf } from '../utils/user.js';
+import { sectionIdOf } from '../utils/user.js';
 import { SLOTS, LUNCH, DAYS, parseDay, isValidSlot, dayName } from '../config/slots.js';
 import {
   getWeek,
@@ -822,7 +822,6 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
     }
     return takenBySection.get(sid);
   };
-  const newFaculty = new Map(); // normalised name -> { name, email }
   const newSubjects = new Map(); // "name|sectionId" -> { name, code, sectionName, facultyName }
   const renames = new Map(); // subjectId -> { from, to }
 
@@ -835,32 +834,43 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
 
   /*
    * Existing subjects that have no lecturer of their own and whose lecturer
-   * this file names. Collected here and written at commit time, because the
-   * name may belong to an account that does not exist yet.
+   * this file names — only ever an account that already exists. Written at
+   * commit time, not here, so a preview stays read-only.
    */
   const adoptions = new Map();
 
-  /** Find, or note for creation, the lecturer a printed name refers to. */
+  /* Names the file prints that match no account, reported once each. */
+  const unmatchedNames = new Map();
+
+  /**
+   * The lecturer a printed name refers to — only ever an account that already
+   * exists.
+   *
+   * It used to create one, inventing an address from the name: "Amit Sir"
+   * became amit.sir@sitare.org. A timetable prints whatever fits the cell — a
+   * title, an initial, a nickname, two people sharing a slash — and none of
+   * that is an identifier, so the address was a guess that merely looked
+   * official, and the account it made was unusable by the person it named.
+   * Staff are added in People, where a real address is typed once.
+   *
+   * A name matching nobody leaves the period unassigned rather than failing
+   * the upload: the subject is still created, and an admin assigns its
+   * lecturer afterwards — which fills in every period of it at once, because
+   * a period with no lecturer of its own shows the subject's.
+   */
   const resolveFaculty = (rawName) => {
     const key = normName(rawName);
     if (!key) return null;
     const existing = facultyByName.get(key);
-    if (existing) return { id: existing.id, name: existing.name, isNew: false };
+    if (existing) return { id: existing.id, name: existing.name };
 
     // "Ms Preeti Shukla/Ms Riya Bangera" — the first named owns the subject.
     const primary = String(rawName).split(/[/,]|\s+&\s+/)[0].trim();
     const byPrimary = facultyByName.get(normName(primary));
-    if (byPrimary) return { id: byPrimary.id, name: byPrimary.name, isNew: false };
+    if (byPrimary) return { id: byPrimary.id, name: byPrimary.name };
 
-    const slug = normName(primary)
-      .replace(/\b(dr|mr|mrs|ms|prof)\b/g, '')
-      .trim()
-      .replace(/\s+/g, '.');
-    if (!slug) return null;
-    if (!newFaculty.has(key)) {
-      newFaculty.set(key, { name: primary, email: `${slug}@sitare.org` });
-    }
-    return { id: null, name: primary, isNew: true, key };
+    if (!unmatchedNames.has(key)) unmatchedNames.set(key, primary || String(rawName).trim());
+    return null;
   };
 
   for (const r of records) {
@@ -974,13 +984,13 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
       let facultyRef = null;
       if (email) {
         const hit = facultyByEmail.get(email);
-        if (hit) facultyRef = { id: hit.id, name: hit.name, isNew: false };
+        if (hit) facultyRef = { id: hit.id, name: hit.name };
         else notes.push({ line, message: `No account for "${email}" — period left unassigned` });
       } else if (facName) {
         facultyRef = resolveFaculty(facName);
       } else if (subject?.facultyId) {
         const hit = faculty.find((f) => sameId(f, subject.facultyId));
-        if (hit) facultyRef = { id: hit.id, name: hit.name, isNew: false };
+        if (hit) facultyRef = { id: hit.id, name: hit.name };
       }
 
       /*
@@ -1041,14 +1051,24 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
         subjectCode: subject?.code || pendingSubject?.code || '',
         subjectName: subject?.name || pendingSubject?.name || '',
         faculty: facultyRef?.id || null,
-        pendingFacultyKey: facultyRef?.isNew ? facultyRef.key : null,
         facultyName: facultyRef?.name || '',
         kind: effectiveKind,
         title: effectiveTitle,
         isNewSubject: Boolean(pendingSubject),
-        isNewFaculty: Boolean(facultyRef?.isNew),
       });
     }
+  }
+
+  /*
+   * Once per name, not once per cell: a lecturer printed in twenty periods is
+   * one thing for the admin to act on, and twenty identical lines would bury
+   * every other note on the page.
+   */
+  for (const name of unmatchedNames.values()) {
+    notes.push({
+      line: 0,
+      message: `"${name}" is not a staff account — those periods are unassigned. Add them under People, then set the lecturer on the subject.`,
+    });
   }
 
   // The only thing worth refusing is a file nothing could be read from.
@@ -1061,7 +1081,11 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
 
   const toCreate = {
     sections: missingSections,
-    faculty: [...newFaculty.values()],
+    /* Never anyone: the upload creates no accounts. Kept so the client's
+       shape does not change, and so "0 to create" stays true rather than
+       absent. */
+    faculty: [],
+    unmatchedFaculty: [...unmatchedNames.values()],
     subjects: [...newSubjects.values()].map((s) => ({
       name: s.name,
       code: s.code,
@@ -1080,45 +1104,24 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
     if (create) await prisma.subject.update({ where: { id }, data: { name: r.to } });
   }
 
-  const createdFaculty = new Map();
-  for (const [key, f] of newFaculty) {
-    let doc = await prisma.user.findUnique({ where: { email: f.email } });
-    if (!doc) {
-      doc = await prisma.user.create({
-        data: {
-          name: f.name,
-          email: f.email,
-          password: await hashPassword('faculty123'),
-          role: 'faculty',
-          department: sections[0]?.department || 'Computer Science',
-        },
-      });
-      await notify([doc.id], {
-        type: 'account:created',
-        title: 'Welcome to Sitare University',
-        message: `A faculty account was created for you from the timetable upload. Temporary password: faculty123 — please change it.`,
-        link: '/',
-        createdBy: actor ? idOf(actor) : null,
-      });
-    }
-    createdFaculty.set(key, doc);
-  }
+  /*
+   * No account is ever created here — see resolveFaculty. Staff come from
+   * People, where a real address is typed once, and this path only ever
+   * matches what is already there.
+   */
 
   /*
    * After the accounts exist, so a name the file introduced for the first time
    * can be adopted in the same upload that creates it.
    */
   for (const [subjectId, a] of adoptions) {
-    const doc = a.ref.isNew ? createdFaculty.get(a.ref.key) : { id: a.ref.id };
-    if (!doc?.id) continue;
-    await prisma.subject.update({ where: { id: subjectId }, data: { facultyId: doc.id } });
+    if (!a.ref.id) continue;
+    await prisma.subject.update({ where: { id: subjectId }, data: { facultyId: a.ref.id } });
   }
 
   const createdSubjects = new Map();
   for (const [key, s] of newSubjects) {
-    const facultyDoc = s.facultyName ? createdFaculty.get(normName(s.facultyName)) : null;
     const resolvedFaculty =
-      facultyDoc ||
       facultyByName.get(normName(s.facultyName)) ||
       facultyByName.get(normName(String(s.facultyName).split(/[/,]/)[0]));
 
@@ -1162,10 +1165,6 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
         if (!p.faculty) p.faculty = doc.facultyId;
       }
     }
-    if (p.pendingFacultyKey) {
-      const doc = createdFaculty.get(p.pendingFacultyKey);
-      if (doc) p.faculty = doc.id;
-    }
   }
 
   // Report what was actually written, not what was planned — the two can
@@ -1176,7 +1175,7 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
     warnings,
     notes,
     toCreate,
-    created: { faculty: createdFaculty.size, subjects: createdSubjects.size },
+    created: { faculty: 0, subjects: createdSubjects.size },
   };
 }
 

@@ -367,35 +367,43 @@ export default function ManageTimetable() {
               </div>
             )}
 
-            {/* Anything the file names that does not exist yet. */}
-            {preview.valid &&
-              (preview.toCreate?.subjects?.length > 0 ||
-                preview.toCreate?.faculty?.length > 0) && (
-                <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3.5 py-2.5">
-                  <p className="text-sm font-medium text-indigo-900">
-                    Publishing will also create what this file introduces
-                  </p>
-                  {preview.toCreate.subjects.length > 0 && (
-                    <p className="mt-1 text-xs text-indigo-800">
-                      <span className="font-medium">
-                        {preview.toCreate.subjects.length} subjects:
-                      </span>{' '}
-                      {preview.toCreate.subjects
-                        .map((s) => `${s.code} ${s.name} (Sec ${s.section})`)
-                        .join(', ')}
-                    </p>
-                  )}
-                  {preview.toCreate.faculty.length > 0 && (
-                    <p className="mt-1 text-xs text-indigo-800">
-                      <span className="font-medium">
-                        {preview.toCreate.faculty.length} faculty accounts:
-                      </span>{' '}
-                      {preview.toCreate.faculty.map((f) => `${f.name} (${f.email})`).join(', ')} —
-                      each with the temporary password <span className="font-mono">faculty123</span>
-                    </p>
-                  )}
-                </div>
-              )}
+            {/* Subjects the file introduces. Staff are never created here. */}
+            {preview.valid && preview.toCreate?.subjects?.length > 0 && (
+              <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3.5 py-2.5">
+                <p className="text-sm font-medium text-indigo-900">
+                  Publishing will also create what this file introduces
+                </p>
+                <p className="mt-1 text-xs text-indigo-800">
+                  <span className="font-medium">{preview.toCreate.subjects.length} subjects:</span>{' '}
+                  {preview.toCreate.subjects
+                    .map((s) => `${s.code} ${s.name} (Sec ${s.section})`)
+                    .join(', ')}
+                </p>
+              </div>
+            )}
+
+            {/*
+              Names the file prints that belong to nobody. Said plainly and
+              before publishing, because the periods will come out blank and
+              the reason has to be visible at the point it is decided — not
+              discovered later on the grid.
+            */}
+            {preview.valid && preview.toCreate?.unmatchedFaculty?.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5">
+                <p className="text-sm font-medium text-amber-900">
+                  {preview.toCreate.unmatchedFaculty.length} name
+                  {preview.toCreate.unmatchedFaculty.length === 1 ? '' : 's'} on this timetable
+                  {preview.toCreate.unmatchedFaculty.length === 1 ? ' is' : ' are'} not a staff
+                  account
+                </p>
+                <p className="mt-1 text-xs text-amber-900/80">
+                  {preview.toCreate.unmatchedFaculty.join(', ')} — no account is created from a
+                  timetable, because the name printed in a cell is not an email address. Add them
+                  under <span className="font-medium">People → Faculty</span>, then set each
+                  subject's lecturer from Academics; every period of that subject picks it up.
+                </p>
+              </div>
+            )}
 
             {/* What was actually extracted — the human check on PDF inference. */}
             {preview.valid && preview.entries?.length > 0 && (
