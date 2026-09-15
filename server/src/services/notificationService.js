@@ -1,5 +1,6 @@
 import { prisma } from '../config/prisma.js';
 import { emitToUsers } from '../sockets/index.js';
+import { pushToUsers } from './pushService.js';
 import { idOf } from '../utils/ids.js';
 
 /**
@@ -45,6 +46,16 @@ export async function notify(userIds, payload) {
       createdAt: d.createdAt,
     });
   });
+
+  /*
+   * And out to any browser that asked for it, for the people who do not have
+   * the page open. Deliberately not awaited: the rows are written and the
+   * socket has already fired, so the bell is correct whatever happens next,
+   * and a slow or unreachable push service must not hold up the request that
+   * caused it — publishing a timetable should not wait on Google. `catch` is
+   * belt and braces; pushToUsers already resolves rather than rejects.
+   */
+  pushToUsers(ids, base).catch((err) => console.error('[push] send failed:', err.message));
 
   return docs;
 }

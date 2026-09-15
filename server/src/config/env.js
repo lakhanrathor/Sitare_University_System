@@ -44,6 +44,23 @@ if (!googleClientId && !isProd) {
   console.warn('[config] GOOGLE_CLIENT_ID not set — Google sign-in is disabled.');
 }
 
+/*
+ * Web Push, optional for the same reason Google sign-in is: a checkout with no
+ * VAPID keypair must still boot, and every existing way a notification reaches
+ * someone — the bell, the socket — must keep working untouched. Without both
+ * halves of the pair, push is simply off: nothing subscribes and nothing sends.
+ *
+ * The subject is a contact the push service can use to reach whoever operates
+ * this server if a subscription starts misbehaving; it has to be a mailto: or
+ * an https: URL, and web-push refuses anything else.
+ */
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || null;
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || null;
+const pushEnabled = Boolean(vapidPublicKey && vapidPrivateKey);
+if (!pushEnabled && !isProd) {
+  console.warn('[config] VAPID keys not set — browser push notifications are disabled.');
+}
+
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 5000),
@@ -52,5 +69,9 @@ export const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   googleClientId,
+  vapidPublicKey,
+  vapidPrivateKey,
+  vapidSubject: process.env.VAPID_SUBJECT || 'mailto:admin@sitare.org',
+  pushEnabled,
   isProd,
 };

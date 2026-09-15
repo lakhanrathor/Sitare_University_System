@@ -151,6 +151,7 @@ model User {
   leaveDocuments       LeaveDocument[]        @relation("LeaveStudent")
   leaveUploads         LeaveDocument[]        @relation("LeaveUploadedBy")
   notifications        Notification[]         @relation("NotificationUser")
+  pushSubscriptions    PushSubscription[]
   notificationsCreated Notification[]         @relation("NotificationCreatedBy")
 
   @@index([role])
@@ -778,6 +779,36 @@ model LeaveDocument {
   @@index([uploadedById])
   @@index([studentId, sentAt(sort: Desc)])
   @@map("leave_documents")
+}
+
+/// One browser, on one device, that has agreed to receive push notifications.
+///
+/// Not one per user: somebody signs in on a phone and a laptop and expects both
+/// to buzz. The endpoint is the push service's own URL for that browser and is
+/// the natural key — re-subscribing the same browser returns the same endpoint,
+/// so an upsert on it is what keeps this table from growing a row per visit.
+model PushSubscription {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The push service endpoint. Chrome's are long; no index prefix limit in PG.
+  endpoint String @unique
+
+  /// The subscription's own keys. The payload is encrypted with these, so the
+  /// push service relays ciphertext it cannot read (RFC 8291).
+  p256dh String
+  auth   String
+
+  /// Only to tell two devices apart in a list — never used for a decision.
+  userAgent String @default("") @map("user_agent")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model Notification {

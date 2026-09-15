@@ -287,6 +287,13 @@ export const api = {
   downloadExamFile: (examId, attachmentId, filename) =>
     downloadBlob(`/exams/${examId}/attachments/${attachmentId}`, filename),
 
+  /* ---- Browser push ---- */
+  pushConfig: () => request('/notifications/push/config'),
+  subscribePush: ({ endpoint, keys }) =>
+    request('/notifications/push/subscribe', { method: 'POST', body: { endpoint, keys } }),
+  unsubscribePush: (endpoint) =>
+    request('/notifications/push/unsubscribe', { method: 'POST', body: { endpoint } }),
+
   /* ---- Notes: course material shared with a cohort ---- */
   notes: (params = {}) => {
     const q = new URLSearchParams(

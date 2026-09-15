@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Bell, CheckCheck, BellRing, BellOff, Loader2 } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
+import { pushState, enablePush, disablePush } from '../lib/push';
 
 function timeAgo(iso) {
   const secs = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -14,8 +15,42 @@ function timeAgo(iso) {
 export default function NotificationBell() {
   const { items, unread, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
+  const [push, setPush] = useState(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState('');
   const ref = useRef(null);
   const navigate = useNavigate();
+
+  /*
+   * Read when the panel opens, not on mount. Asking the browser about push on
+   * every page load is work nobody asked for, and the answer can change
+   * outside the app — permission is revoked from browser settings, not here.
+   */
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    pushState()
+      .then((s) => alive && setPush(s))
+      .catch(() => alive && setPush(null));
+    return () => {
+      alive = false;
+    };
+  }, [open]);
+
+  const togglePush = async () => {
+    setPushBusy(true);
+    setPushError('');
+    try {
+      if (push?.subscribed) await disablePush();
+      else await enablePush();
+      setPush(await pushState());
+    } catch (err) {
+      setPushError(err.message);
+      setPush(await pushState().catch(() => push));
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -66,6 +101,41 @@ export default function NotificationBell() {
               </button>
             )}
           </div>
+
+          {/*
+            Only where it can actually do something: a browser without push and
+            a server without keys both render nothing rather than a control
+            that cannot work. Blocked is the exception worth saying out loud,
+            because the fix is somewhere this app cannot reach.
+          */}
+          {push?.supported && push.enabled && (
+            <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-2">
+              {push.permission === 'denied' ? (
+                <p className="text-xs text-slate-500">
+                  Notifications are blocked for this site — allow them in your browser settings to
+                  get them on this device.
+                </p>
+              ) : (
+                <button
+                  onClick={togglePush}
+                  disabled={pushBusy}
+                  className="flex w-full items-center gap-2 text-left text-xs font-medium text-slate-600 transition hover:text-indigo-700 disabled:opacity-60"
+                >
+                  {pushBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : push.subscribed ? (
+                    <BellRing className="h-3.5 w-3.5 text-indigo-600" />
+                  ) : (
+                    <BellOff className="h-3.5 w-3.5 text-slate-400" />
+                  )}
+                  {push.subscribed
+                    ? 'This device gets notifications — turn off'
+                    : 'Also notify me on this device'}
+                </button>
+              )}
+              {pushError && <p className="mt-1 text-xs text-rose-600">{pushError}</p>}
+            </div>
+          )}
 
           <div className="max-h-96 overflow-y-auto">
             {items.length === 0 ? (
