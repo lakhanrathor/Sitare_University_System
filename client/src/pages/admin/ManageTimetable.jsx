@@ -15,6 +15,12 @@ import {
 
 const DAY_LABEL = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+/** "A", "A or B", "A, B or C" — the names have to read as part of a sentence. */
+function orList(names) {
+  if (names.length <= 1) return names[0] || '';
+  return `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
+}
+
 const STATUS_STYLE = {
   published: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   draft: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -391,13 +397,8 @@ export default function ManageTimetable() {
             {preview.valid && preview.toCreate?.unmatchedFaculty?.length > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5">
                 <p className="text-sm font-medium text-amber-900">
-                  {preview.toCreate.unmatchedFaculty.length} name
-                  {preview.toCreate.unmatchedFaculty.length === 1 ? '' : 's'} on this timetable
-                  {preview.toCreate.unmatchedFaculty.length === 1 ? ' is' : ' are'} not a staff
-                  account
-                </p>
-                <p className="mt-1 text-xs text-amber-900/80">
-                  {preview.toCreate.unmatchedFaculty.join(', ')}
+                  There is no lecturer named {orList(preview.toCreate.unmatchedFaculty)} — those
+                  periods will have no lecturer
                 </p>
               </div>
             )}

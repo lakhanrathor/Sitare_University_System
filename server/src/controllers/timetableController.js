@@ -699,6 +699,13 @@ async function readUpload(req, semester) {
   throw ApiError.badRequest('Attach a timetable PDF, or paste the timetable text');
 }
 
+/** A person's name with any leading title dropped — see facultyByBareName. */
+const bareName = (s) =>
+  normName(s)
+    .replace(/^(?:dr|mr|mrs|ms|miss|prof|professor|shri|smt|sir)\s+/g, '')
+    .replace(/\s+(?:sir|ma am|maam|madam)$/g, '')
+    .trim();
+
 const normName = (s) =>
   String(s || '')
     .toLowerCase()
@@ -800,6 +807,20 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
   }
   const facultyByEmail = new Map(faculty.map((f) => [f.email.toLowerCase(), f]));
   const facultyByName = new Map(faculty.map((f) => [normName(f.name), f]));
+  /*
+   * The same names again with the title removed from the front.
+   *
+   * A timetable prints "Mr Ankit Mehta" where the account says "Ankit Mehta",
+   * and warning an admin that a lecturer they registered ten minutes ago does
+   * not exist is worse than useless — it teaches them to ignore the warning.
+   * A title is not part of a name, so it is not allowed to decide a match.
+   * Built as a second index rather than by loosening normName, which also
+   * keys subjects: "Dr" is a title in front of a person and a word in the
+   * middle of a subject.
+   */
+  const facultyByBareName = new Map(
+    faculty.map((f) => [bareName(f.name), f]).filter(([k]) => k)
+  );
   const subjectByKey = new Map(
     subjects.map((s) => [`${s.code.toUpperCase()}|${s.sectionId ?? ''}`, s])
   );
@@ -868,6 +889,11 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
     const primary = String(rawName).split(/[/,]|\s+&\s+/)[0].trim();
     const byPrimary = facultyByName.get(normName(primary));
     if (byPrimary) return { id: byPrimary.id, name: byPrimary.name };
+
+    // Last, and only on the name itself: "Mr Ankit Mehta" is "Ankit Mehta".
+    const bare = bareName(primary);
+    const byBare = bare && facultyByBareName.get(bare);
+    if (byBare) return { id: byBare.id, name: byBare.name };
 
     if (!unmatchedNames.has(key)) unmatchedNames.set(key, primary || String(rawName).trim());
     return null;
@@ -1067,7 +1093,7 @@ async function buildEntriesFromRecords(records, semester, { create = false, acto
   for (const name of unmatchedNames.values()) {
     notes.push({
       line: 0,
-      message: `"${name}" is not a staff account — those periods are unassigned`,
+      message: `There is no lecturer named "${name}" — those periods are unassigned`,
     });
   }
 
