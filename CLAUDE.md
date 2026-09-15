@@ -38,13 +38,16 @@ server/src
 ├── controllers/   auth · subject · attendance · timetable · schedule · swap
 │                  admin · note · exam · leave · notification
 ├── middleware/     auth (JWT + role guard) · validate (zod) · error (maps Prisma/Zod errors) · upload (multer)
-├── utils/          audit.js (security/audit log lines) · ApiError · asyncHandler · csv · date · pdf
+├── utils/          ids.js (sameId/idOf — see below) · audit.js (security/audit log lines)
+│                  ApiError · asyncHandler · csv · date · pdf · section · user
 ├── sockets/        JWT-authenticated Socket.io gateway
 └── seed/           seed.js wipes the DB and creates one admin · fixture.js loads the demo dataset
 
 server/  (repo root of the API, one level up from src/)
 ├── security-check.mjs      <- HTTP-level security regression checks against a running server
 ├── google-auth-check.mjs   <- unit checks for resolveGoogleUser against fabricated payloads
+├── api-snapshot.mjs        <- golden-output diff over 52 endpoints (catches a wrong number)
+├── guard-ids.mjs           <- fails the build if a banned id pattern reappears
 └── create-admin.mjs        <- adds one admin to a database that must NOT be wiped (real prod)
 
 client/src
@@ -57,7 +60,8 @@ client/src
 ├── pages/exams/     Exams
 ├── pages/swaps/     Swaps (request queue + admin approval)
 ├── components/      Layout · AttendanceRing · NotificationBell · timetable/* · ui.jsx
-└── lib/             api.js (every backend call) · timetable.js · format.js
+├── lib/             api.js (every backend call) · timetable.js · format.js
+└── index.css        the palette and elevation, defined once — see Conventions below
 ```
 
 ## Running it locally
@@ -192,6 +196,20 @@ reading another's material changes what people are willing to put up. Admins kee
 because somebody has to be able to answer "what has this year been given" and to take down what
 should not be there. Students only see their own semester + section.
 
+**A notification outlives whatever it announced unless you take it back.** Anything that
+announces a record — an exam timetable, a published grid, a note — is tagged with that record's
+id in `meta`, and deleting the record must call `withdrawNotifications` on the same tag. Left
+behind, the bell offers a link to something that no longer resolves. Two things this has already
+caught: a *correction* notice is a different `type` from the original, so withdrawing only the
+original leaves the correction standing; and withdrawing is not the same as telling anyone —
+someone who read the original and planned around it needs a new notice saying it is gone.
+
+**The person who made a change is never notified of it.** Every audience is filtered against the
+actor before `notify`. The confirmation on screen is what tells them it worked; a notification
+telling somebody what they just did is noise, and noise is what makes a bell stop being read.
+When an audience looks like it is not firing, check whether the only account being tested *is*
+the actor before concluding the notification is broken.
+
 **Deactivate, don't delete.** Attendance records reference people and subjects, so removing
 them would tear holes in past registers. Faculty, students, subjects with recorded history, and
 sections are deactivated/retired, never hard-deleted, and a lecturer who still teaches something
@@ -209,12 +227,14 @@ Attendance    -> session × student (unique) · present|absent|late
 AttendanceDelegation -> subject × dateKey × slot (unique) · who may mark this one class
 
 Timetable      -> versioned, draft|published|archived, per semester
+TimetableSlot  -> timetable × slot (composite PK) · the period grid that version runs on
 TimetableEntry -> timetable × dayOfWeek × slot × section (unique) · subject, faculty, kind
 ScheduleChange -> extra | move | cancel, on a specific date · always carries `timetable`
 SwapRequest    -> two entries + dates · pending|approved|rejected|declined|withdrawn
 
 Note          -> semester, section (nullable), subject, attachments, uploadedBy
-ExamSchedule  -> semester (nullable = whole college), section (nullable), papers[] (dated), attachments
+ExamSchedule  -> semester (nullable = whole college), section (nullable), papers[], attachments
+ExamPaper     -> exam × subject-or-label · dateKey, times, room — its id is exposed to the client
 LeaveDocument -> student, sentAt, regarding, attachments · source student|upload|email
 Attachment    -> exactly one of note | exam | leave (CHECK) · File holds the bytes
 Notification  -> per recipient, pushed over the socket and persisted
@@ -232,9 +252,9 @@ All routes except `/api/auth/login` and `/api/auth/google` require `Authorizatio
 | `/api/timetable` | meta, week view, versions, PDF preview/upload, publish |
 | `/api/schedule` | free slots, extra/move/cancel, schedule-change list |
 | `/api/swaps` | candidates, create, decide (admin only), decline/withdraw |
-| `/api/admin` | users, sections, subjects, overview, imports |
-| `/api/notes` | course material — upload/list/download, scoped per cohort |
-| `/api/exams` | exam schedules — publish/list/download |
+| `/api/admin` | users, sections, subjects, overview, imports (students and faculty) |
+| `/api/notes` | course material — upload/list/download; students see their cohort, a lecturer only their own |
+| `/api/exams` | exam schedules — publish, correct, withdraw, list, download |
 | `/api/leave` | leave applications — student submits own, admin reads all |
 | `/api/notifications` | list, mark read |
 
@@ -247,6 +267,8 @@ All routes except `/api/auth/login` and `/api/auth/google` require `Authorizatio
 | `timetable:changed` | → staff + affected students | grid refetches with no reload |
 | `swap:updated` | → both parties + admins | swap queue refreshes |
 | `notification:new` | → one recipient | bell increments and a toast appears |
+| `notification:removed` | → one recipient | a withdrawn notice disappears from an open bell |
+| `exam:published` | → the cohort + staff | exam list refetches (also sent on withdrawal) |
 
 ## Security
 
@@ -256,9 +278,12 @@ All routes except `/api/auth/login` and `/api/auth/google` require `Authorizatio
 - Faculty scoped to their own subjects (`assertSubjectAccess`); admin unrestricted
 - Students can only read their own attendance, leave applications and notes for their cohort.
   Faculty are scoped the same way for the two places this previously leaked: a note's
-  *download* endpoint now runs the same cohort check as its list endpoint
-  ([noteController.js](server/src/controllers/noteController.js)), and a faculty member can only
-  pull a student's attendance summary if they actually teach a subject that student takes
+  *download* endpoint runs the same check as its list endpoint — `loadVisible` mirrors
+  `scopeFor` in [noteController.js](server/src/controllers/noteController.js), so a note a
+  lecturer cannot see is also one they cannot fetch by id. **Hiding a row from a list is not
+  access control**; every list scope in this codebase has a matching by-id guard, and the two
+  must be changed together. A faculty member can likewise only pull a student's attendance
+  summary if they actually teach a subject that student takes
   ([attendanceController.js](server/src/controllers/attendanceController.js))
 - Rate limiting on both login routes: password login is keyed by the account being targeted
   rather than IP, so a shared campus network can't lock out everyone behind it over one person's
@@ -306,6 +331,23 @@ with no Google Cloud project still has working password login.
 
 ## Conventions for working in this codebase
 
+- **Design: the palette is defined once, in
+  [index.css](client/src/index.css).** `indigo` is deliberately *redefined* there rather than
+  replaced by a new colour name — every screen already reaches for `bg-indigo-600`, so changing
+  what indigo means restyles the whole application without a half-migrated period where two
+  blues are on screen at once. `accent` (orange) is separate because amber already means
+  "attendance needs attention", and a highlight must not be confusable with a warning.
+  `.elev-1` / `.elev-2` are the only shadows; do not guess a new one per component.
+- **Page furniture comes from [ui.jsx](client/src/components/ui.jsx), not from bespoke markup.**
+  `HeroPanel` is the violet panel a *dashboard* opens with; `PageHeader` is the lighter heading
+  a working page opens with, carrying a per-page icon tile. A coloured slab on every screen
+  stops reading as emphasis by the third page, which is why those are two components and not
+  one. `SectionTitle`'s accent bar marks every section heading in the app — a page with plain
+  bold headings is the thing that makes the content look unrelated to the navigation.
+- **A value list enforced by a CHECK lives in two places and must move in both.** Exam kinds are
+  `src/config/exams.js` *and* a CHECK constraint on `exam_schedules.exam_type`; entry kinds are
+  the same shape. Changing one without the other either rejects a value the UI offers or admits
+  one it does not. Before removing a value, check no row still uses it.
 - **Comments explain WHY, not WHAT.** The codebase deliberately avoids comments that restate
   what a line does; a comment exists only when it records a non-obvious constraint, a past
   incident, or a reason a simpler approach doesn't work (see `LeaveDocument.js` or
